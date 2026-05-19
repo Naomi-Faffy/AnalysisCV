@@ -1,17 +1,24 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, Response
+import mimetypes
 from flask_cors import CORS
 import os
 import re
 import shutil
 import json
 from io import BytesIO
+from functools import lru_cache
 from werkzeug.utils import secure_filename
 from cv_parser import CVParser
 from scoring import ScoringSystem
 from excel_manager import ExcelManager
 from jobs_manager import JobsManager
+from blob_storage import BlobStorageClient
 import pandas as pd
 from datetime import datetime
+try:
+    import mammoth
+except Exception:
+    mammoth = None
 
 app = Flask(__name__)
 CORS(app)
@@ -38,6 +45,7 @@ cv_parser = CVParser()
 scoring_system = ScoringSystem()
 excel_manager = ExcelManager(os.path.join(DATA_FOLDER, 'applicants.xlsx'))
 jobs_manager = JobsManager(os.path.join(DATA_FOLDER, 'jobs.xlsx'))
+blob_storage_client = BlobStorageClient()
 
 # Ensure folders exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -125,6 +133,200 @@ def _clear_directory_contents(directory_path: str):
                 os.remove(entry_path)
         except Exception as exc:
             print(f"Warning: could not remove {entry_path}: {exc}")
+
+
+def _normalize_file_token(value: str) -> tuple:
+    base_name = os.path.basename(str(value or '')).lower().strip()
+    stem, ext = os.path.splitext(base_name)
+    normalized_stem = re.sub(r'[^a-z0-9]+', '', stem)
+    return normalized_stem, ext.lstrip('.')
+
+
+def _normalize_text_tokens(value: str) -> set:
+    tokens = set(re.findall(r'\b[a-zA-Z][a-zA-Z0-9+.#/-]{2,}\b', str(value or '').lower()))
+    stop_words = {
+        'the', 'and', 'for', 'with', 'from', 'that', 'this', 'have', 'has', 'was', 'were', 'are', 'your', 'you',
+        'but', 'not', 'can', 'will', 'our', 'their', 'they', 'them', 'into', 'about', 'using', 'used', 'use',
+        'role', 'job', 'jobs', 'position', 'candidate', 'applicants', 'application', 'requirements',
+        'responsibilities', 'responsibility', 'skills', 'experience', 'qualification', 'qualifications',
+        'department', 'category', 'work', 'mode', 'location'
+    }
+    return {token for token in tokens if token not in stop_words}
+
+
+@lru_cache(maxsize=1)
+def _get_uploaded_file_index():
+    upload_folder = app.config.get('UPLOAD_FOLDER', '')
+    try:
+        candidate_names = [
+            f for f in os.listdir(upload_folder)
+            if os.path.isfile(os.path.join(upload_folder, f))
+        ]
+    except Exception:
+        candidate_names = []
+
+    indexed_files = []
+    for candidate_name in candidate_names:
+        candidate_path = os.path.join(upload_folder, candidate_name)
+        parsed = {}
+        try:
+            parsed = cv_parser.parse_cv(candidate_path) or {}
+        except Exception:
+            parsed = {}
+
+        parsed_email = str(parsed.get('email', '') or '').strip().lower()
+        parsed_name = re.sub(
+            r'[^a-z0-9]+', '',
+            f"{parsed.get('first_name', '')} {parsed.get('last_name', '')}".strip().lower(),
+        )
+        parsed_phone = re.sub(r'[^a-z0-9]+', '', str(parsed.get('phone', '') or '').strip().lower())
+        indexed_files.append({
+            'name': candidate_name,
+            'path': candidate_path,
+            'stem': _normalize_file_token(candidate_name)[0],
+            'ext': _normalize_file_token(candidate_name)[1],
+            'email': parsed_email,
+            'name_key': parsed_name,
+            'phone_key': parsed_phone,
+            'raw_tokens': _normalize_text_tokens(parsed.get('raw_text', '') or ''),
+        })
+
+    return indexed_files
+
+
+def _resolve_uploaded_file(file_reference: str, candidate_hint: dict = None):
+    """Resolve an uploaded CV file path from a stored filename or candidate info."""
+    upload_folder = app.config.get('UPLOAD_FOLDER', '')
+    safe_name = os.path.basename(str(file_reference or '').strip())
+    if not safe_name:
+        return None, ''
+
+    direct_path = os.path.join(upload_folder, safe_name)
+    if os.path.exists(direct_path):
+        return direct_path, safe_name
+
+    try:
+        candidates = [
+            f for f in os.listdir(upload_folder)
+            if os.path.isfile(os.path.join(upload_folder, f))
+        ]
+    except Exception:
+        candidates = []
+
+    requested_stem, requested_ext = _normalize_file_token(safe_name)
+    indexed_files = _get_uploaded_file_index()
+    for candidate_file in indexed_files:
+        candidate_name = candidate_file['name']
+        candidate_stem = candidate_file['stem']
+        candidate_ext = candidate_file['ext']
+        if candidate_stem == requested_stem and (not requested_ext or candidate_ext == requested_ext):
+            return candidate_file['path'], candidate_name
+
+    if requested_stem:
+        for candidate_file in indexed_files:
+            candidate_name = candidate_file['name']
+            candidate_stem = candidate_file['stem']
+            if candidate_stem.startswith(requested_stem) or requested_stem in candidate_stem:
+                return candidate_file['path'], candidate_name
+
+    if candidate_hint:
+        target_email = str(candidate_hint.get('Email', '') or '').strip().lower()
+        target_name = re.sub(
+            r'[^a-z0-9]+', '',
+            f"{candidate_hint.get('First Name', '')} {candidate_hint.get('Last Name', '')}".strip().lower(),
+        )
+        target_phone = re.sub(r'[^a-z0-9]+', '', str(candidate_hint.get('Phone', '') or '').strip().lower())
+
+        for candidate_file in indexed_files:
+            candidate_name = candidate_file['name']
+            candidate_path = candidate_file['path']
+            parsed_email = candidate_file['email']
+            parsed_name = candidate_file['name_key']
+            parsed_phone = candidate_file['phone_key']
+
+            if target_email and parsed_email and parsed_email == target_email:
+                return candidate_path, candidate_name
+            if target_name and parsed_name and (parsed_name == target_name or parsed_name in target_name or target_name in parsed_name):
+                return candidate_path, candidate_name
+            if target_phone and parsed_phone and parsed_phone == target_phone:
+                return candidate_path, candidate_name
+
+        target_keywords = _normalize_text_tokens(
+            ' '.join([
+                str(candidate_hint.get('Profile Keywords', '') or ''),
+                str(candidate_hint.get('Skills', '') or ''),
+                str(candidate_hint.get('Education', '') or ''),
+                str(candidate_hint.get('Current Role', '') or ''),
+                str(candidate_hint.get('Applied Job Title', '') or ''),
+            ])
+        )
+        if target_keywords:
+            best_match = (0, None, '')
+            for candidate_file in indexed_files:
+                overlap = len(target_keywords & candidate_file.get('raw_tokens', set()))
+                if overlap > best_match[0]:
+                    best_match = (overlap, candidate_file['path'], candidate_file['name'])
+            if best_match[0] >= 5 and best_match[1]:
+                return best_match[1], best_match[2]
+
+    if blob_storage_client.enabled:
+        blob_candidates = []
+        if safe_name:
+            blob_candidates.extend([
+                safe_name,
+                f'uploads/{safe_name}',
+            ])
+
+        for blob_path in blob_candidates:
+            try:
+                restored = blob_storage_client.download_file(blob_path, direct_path)
+                if restored and os.path.exists(direct_path):
+                    return direct_path, safe_name
+            except Exception:
+                continue
+
+    return None, ''
+
+
+def _serve_uploaded_file(file_path: str, safe_name: str):
+    mime_type, _ = mimetypes.guess_type(file_path)
+    ext = os.path.splitext(file_path)[1].lower()
+    inline_exts = {'.pdf', '.png', '.jpg', '.jpeg', '.txt', '.html'}
+
+    if ext == '.docx':
+        if mammoth is not None:
+            try:
+                with open(file_path, 'rb') as docx_file:
+                    result = mammoth.convert_to_html(docx_file)
+                    html = result.value or ''
+                    wrapper = f"<html><head><meta charset=\"utf-8\"></head><body>{html}</body></html>"
+                    headers = {'Content-Disposition': f'inline; filename="{safe_name}.html"'}
+                    return Response(wrapper, mimetype='text/html', headers=headers)
+            except Exception as e:
+                print(f"Mammoth conversion failed for {file_path}: {e}")
+                return send_file(file_path, as_attachment=True, download_name=safe_name, mimetype=mime_type)
+        return send_file(file_path, as_attachment=True, download_name=safe_name, mimetype=mime_type)
+
+    as_attachment = not (ext in inline_exts)
+    resp = send_file(file_path, as_attachment=as_attachment, download_name=safe_name, mimetype=mime_type)
+    if not as_attachment:
+        try:
+            resp.headers['Content-Disposition'] = f'inline; filename={safe_name}'
+        except Exception:
+            pass
+    return resp
+
+
+def _with_cv_availability(candidate: dict) -> dict:
+    candidate_data = dict(candidate or {})
+    resolved_path, resolved_name = _resolve_uploaded_file(
+        candidate_data.get('CV File Name', ''),
+        candidate_hint=candidate_data,
+    )
+    candidate_data['CV Available'] = bool(resolved_path)
+    if resolved_name:
+        candidate_data['Resolved CV File Name'] = resolved_name
+    return candidate_data
 
 
 def build_active_job_report(job: dict) -> dict:
@@ -235,9 +437,18 @@ def build_active_job_report(job: dict) -> dict:
         ranked_candidates.append({
             'Applicant ID': safe_value(row.get('Applicant ID', '')),
             'Candidate Key': safe_value(row.get('Candidate Key', '')),
+            'First Name': safe_value(row.get('First Name', '')),
+            'Last Name': safe_value(row.get('Last Name', '')),
             'Name': f"{row.get('First Name', '')} {row.get('Last Name', '')}".strip(),
             'Email': safe_value(row.get('Email', '')),
             'Phone': safe_value(row.get('Phone', '')),
+            'CV File Name': safe_value(row.get('CV File Name', '')),
+            'CV Available': bool(_resolve_uploaded_file(row.get('CV File Name', ''), candidate_hint={
+                'First Name': row.get('First Name', ''),
+                'Last Name': row.get('Last Name', ''),
+                'Email': row.get('Email', ''),
+                'Phone': row.get('Phone', ''),
+            })[0]),
             'Final Score (%)': round(final_score, 2),
             'Match Score (%)': match_score,
             'Coverage (%)': round(keyword_score, 2),
@@ -303,6 +514,14 @@ def process_uploaded_file(file_obj, job_id: str = ''):
             should_delete_file = True
             return {'success': False, 'status': 400, 'error': f'Could not parse {filename}'}
 
+        if not candidate_data.get('first_name') and not candidate_data.get('last_name') and not candidate_data.get('email'):
+            stem = os.path.splitext(filename)[0]
+            fallback_parts = [part for part in re.findall(r'[A-Za-z][A-Za-z\-]{1,30}', stem) if part.lower() not in {'resume', 'cv', 'cvs', 'file', 'doc', 'pdf'}]
+            if fallback_parts:
+                candidate_data['first_name'] = fallback_parts[0]
+                if len(fallback_parts) > 1:
+                    candidate_data['last_name'] = fallback_parts[1]
+
         if not (candidate_data.get('email') or candidate_data.get('first_name') or candidate_data.get('last_name') or candidate_data.get('phone')):
             should_delete_file = True
             return {
@@ -333,6 +552,17 @@ def process_uploaded_file(file_obj, job_id: str = ''):
         if not success:
             should_delete_file = True
             return {'success': False, 'status': 500, 'error': f'Failed to add candidate from {filename}'}
+
+        if blob_storage_client.enabled:
+            try:
+                content_type, _ = mimetypes.guess_type(file_path)
+                blob_storage_client.upload_file(
+                    f'uploads/{filename}',
+                    file_path,
+                    content_type=content_type or 'application/octet-stream'
+                )
+            except Exception as exc:
+                print(f"Warning: could not sync {filename} to blob storage: {exc}")
 
         return {
             'success': True,
@@ -441,6 +671,9 @@ def delete_job(job_id):
     except Exception as e:
         print(f"Error in delete_job: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+
 
 
 @app.route('/api/jobs/<job_id>/activate', methods=['POST'])
@@ -664,8 +897,11 @@ def get_candidates():
             filters['has_driver_license'] = request.args.get('has_driver_license')
         if request.args.get('applied_job_id'):
             filters['applied_job_id'] = request.args.get('applied_job_id')
+        if request.args.get('applied_job_title'):
+            filters['applied_job_title'] = request.args.get('applied_job_title')
 
         candidates = excel_manager.get_all_candidates() if not filters else excel_manager.filter_candidates(filters)
+        candidates = [_with_cv_availability(candidate) for candidate in candidates]
         
         return jsonify({
             'success': True,
@@ -776,6 +1012,39 @@ def download_excel():
             return jsonify({'error': 'Excel file not found'}), 404
     except Exception as e:
         print(f"Error in download_excel: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/download-upload/<path:filename>', methods=['GET'], endpoint='download_upload_route')
+def download_upload(filename):
+    """Serve an uploaded CV file by filename from the uploads folder.
+
+    For commonly viewable types (PDF, images, text/html) set Content-Disposition
+    to inline so the browser opens them in a new tab. For other types force
+    download as an attachment.
+    """
+    try:
+        file_path, safe_name = _resolve_uploaded_file(filename)
+        if not file_path:
+            return jsonify({'error': 'File not found'}), 404
+        return _serve_uploaded_file(file_path, safe_name)
+    except Exception as e:
+        print(f"Error in download_upload: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/download-candidate-cv/<path:identifier>', methods=['GET'], endpoint='download_candidate_cv_route')
+def download_candidate_cv(identifier):
+    """Resolve and serve a candidate CV from a candidate identifier or email."""
+    try:
+        candidate = excel_manager.get_candidate_by_email(identifier) or {}
+        file_reference = candidate.get('CV File Name', '') or identifier
+        file_path, safe_name = _resolve_uploaded_file(file_reference, candidate_hint=candidate)
+        if not file_path:
+            return jsonify({'error': 'File not found'}), 404
+        return _serve_uploaded_file(file_path, safe_name)
+    except Exception as e:
+        print(f"Error in download_candidate_cv: {e}")
         return jsonify({'error': str(e)}), 500
 
 

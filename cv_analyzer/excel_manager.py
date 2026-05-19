@@ -515,6 +515,8 @@ class ExcelManager:
                 df = df[pd.to_numeric(df['Years of Experience'], errors='coerce').fillna(0) >= float(filters['min_experience'])]
             if 'applied_job_id' in filters:
                 df = df[df['Applied Job ID'].fillna('').astype(str) == str(filters['applied_job_id'])]
+            if 'applied_job_title' in filters:
+                df = df[df['Applied Job Title'].fillna('').str.contains(str(filters['applied_job_title']), case=False, na=False)]
             if 'has_driver_license' in filters:
                 license_value = str(filters['has_driver_license']).lower()
                 if license_value in ['true', '1', 'yes']:

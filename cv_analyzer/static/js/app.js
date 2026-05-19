@@ -183,6 +183,24 @@ async function loadJobs() {
 
         state.jobs = result.jobs || [];
         renderJobsBoard();
+        // Populate job filter dropdown if present — dedupe by job title
+        const jobFilterEl = document.getElementById('jobFilter');
+        if (jobFilterEl) {
+            const current = jobFilterEl.value || '';
+            jobFilterEl.innerHTML = '<option value="">All Candidates</option>';
+            const seenTitles = new Set();
+            state.jobs.forEach((job) => {
+                const title = (job['Job Title'] || '').trim() || (job['Job ID'] || '').trim();
+                if (!title || seenTitles.has(title)) return;
+                seenTitles.add(title);
+                const opt = document.createElement('option');
+                // store the job title as the value so selecting the title filters by title across jobs
+                opt.value = title;
+                opt.textContent = title;
+                jobFilterEl.appendChild(opt);
+            });
+            if (current) jobFilterEl.value = current;
+        }
     } catch (error) {
         console.error('Failed to load jobs:', error);
     }
@@ -373,7 +391,10 @@ function renderActiveJobReport() {
                         <div class="candidate-name">${index + 1}. ${escapeHtml(candidate.Name || 'N/A')}</div>
                         <div class="candidate-email">${escapeHtml(candidate.Email || 'No email on file')}</div>
                     </div>
-                    <button class="btn-primary btn-small" onclick="openCandidateModal('${encodeURIComponent(candidateIdentifier(candidate))}')">View</button>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                        <button class="btn-primary btn-small" onclick="openCandidateModal('${encodeURIComponent(candidateIdentifier(candidate))}')">View</button>
+                        <a class="btn-resume btn-small" href="/api/download-candidate-cv/${encodeURIComponent(candidateIdentifier(candidate))}" target="_blank" rel="noopener noreferrer">Resume</a>
+                    </div>
                 </div>
                 <div style="display:flex; gap: 10px; flex-wrap: wrap;">
                     <span class="job-pill">CV Score: ${Number(candidate['Final Score (%)'] || 0).toFixed(1)}%</span>
@@ -475,6 +496,8 @@ function renderActiveJobMatches() {
             const identifier = candidateIdentifier(candidate);
             const score = Number(candidate['Final Score (%)'] || 0).toFixed(1);
             const matchScore = Number(candidate['Match Score (%)'] || 0).toFixed(1);
+            const resumeBtn = `<a class="btn-resume btn-small" href="/api/download-candidate-cv/${encodeURIComponent(identifier)}" target="_blank" rel="noopener noreferrer">Resume</a>`;
+
             return `
                 <tr>
                     <td>${escapeHtml(fullName || 'N/A')}</td>
@@ -483,6 +506,9 @@ function renderActiveJobMatches() {
                     <td>${matchScore}%</td>
                     <td>
                         <button class="btn-primary btn-small" onclick="openCandidateModal('${encodeURIComponent(identifier)}')">View</button>
+                    </td>
+                    <td>
+                        ${resumeBtn}
                     </td>
                 </tr>
             `;
@@ -497,7 +523,8 @@ function renderActiveJobMatches() {
                     <th>Email</th>
                     <th>CV Score</th>
                     <th>Job Match</th>
-                    <th>Action</th>
+                    <th>View</th>
+                    <th>Resume</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -958,7 +985,7 @@ function renderCandidatesTable(containerId, candidates, includeActions) {
     const isAllCandidatesView = containerId === 'candidatesTable';
 
     const headers = isAllCandidatesView
-        ? ['Name', 'Email', 'Contact Number']
+        ? ['Name', 'Email', 'Contact Number', 'CV File Name']
         : ['Name', 'Email', 'Gender', 'Age', 'Location', 'Education', 'Experience', 'Skills', 'Final Score', 'Applied Job', 'Match'];
 
     const rows = candidates
@@ -970,12 +997,15 @@ function renderCandidatesTable(containerId, candidates, includeActions) {
             const badge = scoreClass(score);
             const phone = candidate['Phone'] || '';
 
+            const cvFileName = candidate['CV File Name'] || candidate['file_name'] || '';
             if (isAllCandidatesView) {
+                const safeLink = cvFileName ? `<a href="/api/download-candidate-cv/${encodeURIComponent(identifier)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cvFileName)}</a>` : '-';
                 return `
                     <tr>
                         <td>${escapeHtml(name || 'N/A')}</td>
                         <td>${escapeHtml(email || 'No email on file')}</td>
                         <td>${escapeHtml(phone || '-')}</td>
+                        <td>${safeLink}</td>
                     </tr>
                 `;
             }
@@ -1133,6 +1163,7 @@ async function applyFilters() {
         education_level: valueOf('educationFilter'),
         skill: valueOf('skillFilter'),
         min_experience: valueOf('minExperience'),
+        applied_job_title: valueOf('jobFilter'),
         has_driver_license: valueOf('driverLicenseFilter')
     };
 

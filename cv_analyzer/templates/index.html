@@ -28,7 +28,7 @@
                 <li><a href="#jobs" class="nav-link" data-tab="jobs">Jobs</a></li>
                 <li><a href="#active-job" class="nav-link" data-tab="active-job">Active Job</a></li>
                 <li><a href="#filters" class="nav-link" data-tab="filters">Search & Filter</a></li>
-                <li><a href="/admin" class="nav-link">⚙️ Admin</a></li>
+                <li><a href="/admin" class="nav-link">Admin</a></li>
             </ul>
             <div class="sidebar-footer">
                 <button class="btn-download" onclick="downloadExcel()">Download Excel</button>
@@ -302,6 +302,13 @@
                         </div>
 
                         <div class="filter-group">
+                            <label for="jobFilter">Scope</label>
+                            <select id="jobFilter">
+                                <option value="">All Candidates</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
                             <label for="scoreRangeMin">Min Score (%)</label>
                             <input type="number" id="scoreRangeMin" min="0" max="100" step="5">
                         </div>
@@ -386,6 +393,6 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js', v='20260519_3') }}"></script>
 </body>
 </html>

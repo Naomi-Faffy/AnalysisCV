@@ -1,1 +1,2 @@
 -r cv_analyzer/requirements.txt
+mammoth

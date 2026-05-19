@@ -440,21 +440,22 @@ class CVParser:
             'curriculum', 'vitae', 'resume', 'cv', 'contact', 'email', 'phone',
             'summary', 'profile', 'objective', 'address', 'linkedin', 'github'
         }
-        for line in lines[:20]:
+        for line in lines[:40]:
             line = re.sub(r'\s+', ' ', line or '').strip()
             if not line:
                 continue
             lowered = line.lower()
-            if "@" in lowered or any(ch.isdigit() for ch in lowered):
+            if "@" in lowered or any(ch.isdigit() for ch in lowered) or 'http' in lowered:
                 continue
             words = [w for w in re.findall(r"[A-Za-z][A-Za-z'\-]{1,30}", line) if len(w) > 1]
-            if len(words) < 2:
+            if len(words) < 1:
                 continue
-            if words[0].lower() in blocked_tokens or words[1].lower() in blocked_tokens:
+            if words[0].lower() in blocked_tokens or (len(words) >= 2 and words[1].lower() in blocked_tokens):
                 continue
 
             first_name = words[0]
-            last_name = words[1]
+            if len(words) >= 2:
+                last_name = words[1]
             break
 
         if self.nlp and not first_name:
@@ -470,6 +471,10 @@ class CVParser:
         # Clean up
         first_name = re.sub(r'[^a-zA-Z]', '', first_name).strip()
         last_name = re.sub(r'[^a-zA-Z]', '', last_name).strip()
+
+        if first_name and not last_name:
+            # Accept a single strong name token instead of rejecting the CV outright.
+            return first_name, ""
 
         return first_name, last_name
 
@@ -679,21 +684,32 @@ class CVParser:
 
         return sorted(found_skills)
     def extract_driver_license(self, text: str) -> bool:
-        """Check if CV mentions driver's license or driving experience"""
+        """Check if CV mentions driver's license or driving experience.
+
+        Accept common spelling variants (license / licence) and several
+        phrase patterns such as "driving licence", "driver's permit",
+        "licensed driver", or licence classes.
+        """
+        if not text:
+            return False
+
         driver_patterns = [
-            r"\bdriver'?s?\s+license\b",
+            r"\bdriver'?s?\s+licen[cs]e\b",
             r"\bdriver'?s?\s+permit\b",
-            r"\bvalid\s+driver'?s?\s+license\b",
-            r"\bdriving\s+license\b",
+            r"\bvalid\s+driver'?s?\s+licen[cs]e\b",
+            r"\bdriving\s+licen[cs]e\b",
+            r"\bdriving\s+permit\b",
             r"\bPDP\b",  # Professional Driver's Permit
-            r"\bclass\s+[a-z]\s+driver",
-            r"\blicensed\s+driver\b"
+            r"\bclass\s+[a-z0-9]+\b",  # class C, class 2, etc.
+            r"\blicensed\s+driver\b",
+            r"\bholds?\s+(a\s+)?driving\s+licen[cs]e\b",
+            r"\bfull\s+driving\s+licen[cs]e\b",
         ]
-        
+
         for pattern in driver_patterns:
             if re.search(pattern, text, re.IGNORECASE):
                 return True
-        
+
         return False
     
     def parse_with_pyresparser(self, file_path: str) -> List[str]:
