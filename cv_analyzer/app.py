@@ -8,7 +8,7 @@ import json
 from io import BytesIO
 from functools import lru_cache
 from werkzeug.utils import secure_filename
-from .cv_parser import CVParser
+from cv_parser import CVParser
 from .scoring import ScoringSystem
 from .excel_manager import ExcelManager
 from .jobs_manager import JobsManager
