@@ -381,10 +381,10 @@ function renderActiveJobReport() {
     const missingKeywords = report.missing_keywords || [];
     const topCandidates = report.top_candidates || [];
 
-    summary.textContent = `Active job: ${job['Job Title'] || 'Untitled'} | ${totals.ranked_candidates || 0} CVs ranked | ${totals.qualified_pct || 0}% meet the job fit threshold.`;
+    summary.textContent = `Active job: ${job['Job Title'] || 'Untitled'} | Top 30 Ranked Candidates | ${totals.ranked_candidates || 0} CVs ranked`;
 
     const topCandidatesRows = topCandidates.length
-        ? topCandidates.slice(0, 10).map((candidate, index) => `
+        ? topCandidates.slice(0, 30).map((candidate, index) => `
             <div class="candidate-item" style="align-items: stretch; gap: 12px; flex-direction: column;">
                 <div style="display:flex; justify-content:space-between; gap: 12px; align-items:flex-start;">
                     <div class="candidate-info" style="min-width: 0;">

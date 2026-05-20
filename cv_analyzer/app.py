@@ -8,11 +8,11 @@ import json
 from io import BytesIO
 from functools import lru_cache
 from werkzeug.utils import secure_filename
-from cv_parser import CVParser
-from scoring import ScoringSystem
-from excel_manager import ExcelManager
-from jobs_manager import JobsManager
-from blob_storage import BlobStorageClient
+from .cv_parser import CVParser
+from .scoring import ScoringSystem
+from .excel_manager import ExcelManager
+from .jobs_manager import JobsManager
+from .blob_storage import BlobStorageClient
 import pandas as pd
 from datetime import datetime
 try:
@@ -483,7 +483,7 @@ def build_active_job_report(job: dict) -> dict:
         'bands': band_counts,
         'matched_keywords': matched_keywords[:50],
         'missing_keywords': missing_keywords[:50],
-        'top_candidates': ranked_candidates[:10],
+        'top_candidates': ranked_candidates[:30],
         'requirement_keywords': sorted(job_keywords)[:50],
     }
 
