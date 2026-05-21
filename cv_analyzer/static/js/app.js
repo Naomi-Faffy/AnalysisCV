@@ -7,9 +7,15 @@ const state = {
     activeJob: null,
     activeMatches: [],
     activeJobReport: null,
+    candidatePage: 1,
+    filteredCandidatePage: 1,
+    activeTopCount: 20,
+    activeJobFilters: {},
     stats: {},
     charts: {}
 };
+
+const CANDIDATES_PAGE_SIZE = 12;
 
 const chartPalette = [
     '#22489A', '#32B24B', '#FF9F1C', '#3BA7D6', '#A56AE0', '#F06292', '#607D8B', '#26A69A'
@@ -20,12 +26,126 @@ document.addEventListener('DOMContentLoaded', () => {
     initUploadArea();
     initJobForm();
     bindFilterInputs();
+    initActiveJobControls();
     loadDashboard();
     loadCandidates();
     loadJobs();
     loadActiveJobMatches();
     loadActiveJobReport();
 });
+
+function initActiveJobControls() {
+    const topEl = document.getElementById('activeTopCount');
+
+    if (topEl) {
+        // initialize from state
+        topEl.value = String(state.activeTopCount || 20);
+        topEl.addEventListener('change', () => {
+            const val = parseInt(topEl.value, 10) || 20;
+            // constrain to valid values (5..50 step 5)
+            state.activeTopCount = Math.min(50, Math.max(5, Math.round(val / 5) * 5));
+            topEl.value = String(state.activeTopCount);
+            renderActiveJobReport();
+            renderActiveJobMatches();
+        });
+    }
+}
+
+function applyActiveFilters() {
+    const topEl = document.getElementById('activeTopCount');
+    const searchEl = document.getElementById('activeSearchInput');
+    const minScoreEl = document.getElementById('activeScoreRangeMin');
+    const maxScoreEl = document.getElementById('activeScoreRangeMax');
+    const genderEl = document.getElementById('activeGenderFilter');
+    const countryEl = document.getElementById('activeCountryFilter');
+    const cityEl = document.getElementById('activeCityFilter');
+    const educationEl = document.getElementById('activeEducationFilter');
+    const skillEl = document.getElementById('activeSkillFilter');
+    const minExpEl = document.getElementById('activeMinExperience');
+    const driverEl = document.getElementById('activeDriverLicenseFilter');
+
+    state.activeTopCount = topEl ? (parseInt(topEl.value, 10) || 20) : (state.activeTopCount || 20);
+    state.activeJobFilters = {
+        search: searchEl ? searchEl.value.trim() : '',
+        min_score: minScoreEl && minScoreEl.value ? Number(minScoreEl.value) : null,
+        max_score: maxScoreEl && maxScoreEl.value ? Number(maxScoreEl.value) : null,
+        gender: genderEl ? genderEl.value : '',
+        country: countryEl ? countryEl.value.trim() : '',
+        city: cityEl ? cityEl.value.trim() : '',
+        education_level: educationEl ? educationEl.value : '',
+        skill: skillEl ? skillEl.value.trim() : '',
+        min_experience: minExpEl && minExpEl.value ? Number(minExpEl.value) : null,
+        has_driver_license: driverEl ? driverEl.value : ''
+    };
+
+    renderActiveJobReport();
+    renderActiveJobMatches();
+}
+
+function resetActiveFilters() {
+    const topEl = document.getElementById('activeTopCount');
+
+    if (topEl) topEl.value = '20';
+    ['activeSearchInput','activeScoreRangeMin','activeScoreRangeMax','activeGenderFilter','activeCountryFilter','activeCityFilter','activeEducationFilter','activeSkillFilter','activeMinExperience','activeDriverLicenseFilter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.tagName === 'SELECT') el.selectedIndex = 0;
+        else el.value = '';
+    });
+
+    state.activeTopCount = 20;
+    state.activeJobFilters = {};
+    renderActiveJobReport();
+    renderActiveJobMatches();
+}
+
+function _candidatePassesActiveFilters(candidate, filters) {
+    if (!filters || !Object.keys(filters).length) return true;
+    if (filters.min_score !== null && filters.min_score !== undefined) {
+        const fs = Number(candidate['Final Score (%)'] || 0);
+        if (fs < filters.min_score) return false;
+    }
+    if (filters.max_score !== null && filters.max_score !== undefined) {
+        const fs = Number(candidate['Final Score (%)'] || 0);
+        if (fs > filters.max_score) return false;
+    }
+    if (filters.gender) {
+        const g = String(candidate.Gender || '').toLowerCase();
+        if (filters.gender && filters.gender !== '' && g !== String(filters.gender).toLowerCase()) return false;
+    }
+    if (filters.country) {
+        const c = String(candidate.Country || '').toLowerCase();
+        if (!c.includes(String(filters.country).toLowerCase())) return false;
+    }
+    if (filters.city) {
+        const ct = String(candidate.City || '').toLowerCase();
+        if (!ct.includes(String(filters.city).toLowerCase())) return false;
+    }
+    if (filters.education_level) {
+        const ed = String(candidate['Education Level'] || '').toLowerCase();
+        if (filters.education_level && filters.education_level !== '' && ed !== String(filters.education_level).toLowerCase()) return false;
+    }
+    if (filters.search) {
+        const search = String(filters.search).toLowerCase();
+        const fullName = `${candidate['First Name'] || ''} ${candidate['Last Name'] || ''}`.trim().toLowerCase();
+        const email = String(candidate.Email || '').toLowerCase();
+        if (!fullName.includes(search) && !email.includes(search)) return false;
+    }
+    if (filters.skill) {
+        const skl = String(candidate.Skills || '').toLowerCase();
+        if (!skl.includes(String(filters.skill).toLowerCase())) return false;
+    }
+    if (filters.min_experience !== null && filters.min_experience !== undefined) {
+        const exp = Number(candidate['Years of Experience'] || candidate['Years Experience'] || 0) || 0;
+        if (exp < filters.min_experience) return false;
+    }
+    if (filters.has_driver_license) {
+        const drv = String(candidate['Has Driver License'] || candidate['has_driver_license'] || '').toLowerCase();
+        if (filters.has_driver_license === 'true' && drv !== 'true') return false;
+        if (filters.has_driver_license === 'false' && drv === 'true') return false;
+    }
+    return true;
+}
 
 function initNavigation() {
     const links = document.querySelectorAll('.nav-link');
@@ -381,10 +501,19 @@ function renderActiveJobReport() {
     const missingKeywords = report.missing_keywords || [];
     const topCandidates = report.top_candidates || [];
 
-    summary.textContent = `Active job: ${job['Job Title'] || 'Untitled'} | Top 30 Ranked Candidates | ${totals.ranked_candidates || 0} CVs ranked`;
+    const topCount = Number((document.getElementById('activeTopCount') && document.getElementById('activeTopCount').value) || state.activeTopCount || 20);
 
-    const topCandidatesRows = topCandidates.length
-        ? topCandidates.slice(0, 30).map((candidate, index) => `
+    summary.textContent = `Active job: ${job['Job Title'] || 'Untitled'} | ${totals.ranked_candidates || 0} CVs ranked`;
+
+    // Start from the top N, then apply active-job filters to that subset.
+    let candidatesSlice = topCandidates.slice(0, Math.min(topCount, 50));
+    const filters = state.activeJobFilters || {};
+    if (filters && Object.keys(filters).length) {
+        candidatesSlice = candidatesSlice.filter((candidate) => _candidatePassesActiveFilters(candidate, filters));
+    }
+
+    const topCandidatesRows = candidatesSlice.length
+        ? candidatesSlice.map((candidate, index) => `
             <div class="candidate-item" style="align-items: stretch; gap: 12px; flex-direction: column;">
                 <div style="display:flex; justify-content:space-between; gap: 12px; align-items:flex-start;">
                     <div class="candidate-info" style="min-width: 0;">
@@ -488,8 +617,14 @@ function renderActiveJobMatches() {
         return;
     }
 
-    const rows = state.activeMatches
-        .slice(0, 25)
+    const topCount = state.activeTopCount || 20;
+    let matchesSlice = state.activeMatches.slice(0, Math.min(topCount, 50));
+    const filters = state.activeJobFilters || {};
+    if (filters && Object.keys(filters).length) {
+        matchesSlice = matchesSlice.filter(c => _candidatePassesActiveFilters(c, filters));
+    }
+
+    const rows = matchesSlice
         .map((candidate) => {
             const email = candidate['Email'] || '';
             const fullName = `${candidate['First Name'] || ''} ${candidate['Last Name'] || ''}`.trim();
@@ -839,6 +974,11 @@ async function loadCandidates(filters = {}) {
         }
 
         state.candidates = result.candidates || [];
+        if (Object.keys(filters).length > 0) {
+            state.filteredCandidatePage = 1;
+        } else {
+            state.candidatePage = Math.min(state.candidatePage || 1, Math.max(1, Math.ceil(state.candidates.length / CANDIDATES_PAGE_SIZE)));
+        }
         renderCandidatesTable('candidatesTable', state.candidates, false);
 
         if (Object.keys(filters).length > 0) {
@@ -983,12 +1123,19 @@ function renderCandidatesTable(containerId, candidates, includeActions) {
     }
 
     const isAllCandidatesView = containerId === 'candidatesTable';
+    const pageKey = containerId === 'filteredTable' ? 'filteredCandidatePage' : 'candidatePage';
+    const totalPages = Math.max(1, Math.ceil(candidates.length / CANDIDATES_PAGE_SIZE));
+    const requestedPage = Number(state[pageKey] || 1);
+    const currentPage = Math.min(Math.max(1, requestedPage), totalPages);
+    state[pageKey] = currentPage;
+    const startIndex = (currentPage - 1) * CANDIDATES_PAGE_SIZE;
+    const pageCandidates = candidates.slice(startIndex, startIndex + CANDIDATES_PAGE_SIZE);
 
     const headers = isAllCandidatesView
         ? ['Name', 'Email', 'Contact Number', 'CV File Name']
         : ['Name', 'Email', 'Gender', 'Age', 'Location', 'Education', 'Experience', 'Skills', 'Final Score', 'Applied Job', 'Match'];
 
-    const rows = candidates
+    const rows = pageCandidates
         .map((candidate) => {
             const email = candidate['Email'] || '';
             const name = `${candidate['First Name'] || ''} ${candidate['Last Name'] || ''}`.trim();
@@ -1032,6 +1179,21 @@ function renderCandidatesTable(containerId, candidates, includeActions) {
         })
         .join('');
 
+    const pagination = totalPages > 1
+        ? `
+            <div class="pagination-bar">
+                <div class="pagination-info">
+                    Showing ${startIndex + 1}-${Math.min(startIndex + CANDIDATES_PAGE_SIZE, candidates.length)} of ${candidates.length}
+                </div>
+                <div class="pagination-actions">
+                    <button class="btn-secondary pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="goToCandidatePage('${containerId}', ${currentPage - 1})">Prev</button>
+                    <span class="pagination-page">Page ${currentPage} of ${totalPages}</span>
+                    <button class="btn-secondary pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToCandidatePage('${containerId}', ${currentPage + 1})">Next</button>
+                </div>
+            </div>
+        `
+        : '';
+
     container.innerHTML = `
         <table>
             <thead>
@@ -1042,7 +1204,21 @@ function renderCandidatesTable(containerId, candidates, includeActions) {
             </thead>
             <tbody>${rows}</tbody>
         </table>
+        ${pagination}
     `;
+}
+
+function goToCandidatePage(containerId, pageNumber) {
+    const targetPage = Math.max(1, Number(pageNumber) || 1);
+    const pageKey = containerId === 'filteredTable' ? 'filteredCandidatePage' : 'candidatePage';
+    state[pageKey] = targetPage;
+
+    if (containerId === 'filteredTable') {
+        renderCandidatesTable('filteredTable', state.filteredCandidates, false);
+        return;
+    }
+
+    renderCandidatesTable('candidatesTable', state.candidates, false);
 }
 
 async function openCandidateModal(encodedEmail) {
@@ -1190,6 +1366,8 @@ function resetFilters() {
     });
 
     document.getElementById('filteredResults').style.display = 'none';
+    state.candidatePage = 1;
+    state.filteredCandidatePage = 1;
     loadCandidates();
 }
 

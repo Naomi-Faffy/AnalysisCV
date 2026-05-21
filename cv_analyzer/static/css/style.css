@@ -513,6 +513,37 @@ tbody tr:hover {
     font: inherit;
 }
 
+/* Active Job Top Selector Styling */
+.active-top-selector {
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 11px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-800);
+    background: rgba(255, 255, 255, 0.66);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.active-top-selector:hover {
+    border-color: rgba(48, 88, 166, 0.3);
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.active-top-selector:focus {
+    outline: none;
+    border-color: rgba(48, 88, 166, 0.6);
+    box-shadow: 0 0 0 3px rgba(48, 88, 166, 0.14);
+}
+
+.active-top-selector option {
+    color: var(--ink-900);
+    background: rgba(255, 255, 255, 0.96);
+}
 /* Ensure native select dropdowns and their options have good contrast */
 .filter-group select,
 .filter-group select option {
@@ -856,38 +887,53 @@ body::before {
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.logo {
-    padding: 0 12px 22px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
+    .active-top-control {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
 
-.logo h1 {
-    font-size: 22px;
+    .active-top-control label {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: #f4f7fb;
+    }
+
+    padding: 0 12px 22px;
+        min-width: 96px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 12px 14px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #f4f7fb;
+        background: rgba(255, 255, 255, 0.06);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
     font-family: "Cormorant Garamond", Georgia, serif;
     letter-spacing: 0.8px;
     font-weight: 700;
     text-transform: uppercase;
     color: #f8fafc;
 }
-
-.nav-link {
+        border-color: rgba(74, 222, 128, 0.32);
+        background: rgba(255, 255, 255, 0.08);
     text-decoration: none;
     color: rgba(245, 248, 255, 0.82);
     display: block;
     padding: 13px 14px;
-    border: 1px solid transparent;
-    border-radius: 14px;
+        border-color: rgba(74, 222, 128, 0.45);
+        box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.14);
     font-weight: 600;
     transition: transform 0.22s ease, background-color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
 }
-
-.nav-link:hover,
+        color: #101726;
+        background: rgba(255, 255, 255, 0.96);
 .nav-link.active {
-    background: linear-gradient(90deg, rgba(34, 197, 94, 0.2), rgba(255, 255, 255, 0.05));
     border-color: rgba(34, 197, 94, 0.35);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     transform: translateX(4px);
@@ -1173,6 +1219,42 @@ th {
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(6, 10, 18, 0.34);
+}
+
+.pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    color: rgba(245, 248, 255, 0.78);
+    flex-wrap: wrap;
+}
+
+.pagination-info {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.pagination-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pagination-page {
+    min-width: 100px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(245, 248, 255, 0.82);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
 }
 
 table {

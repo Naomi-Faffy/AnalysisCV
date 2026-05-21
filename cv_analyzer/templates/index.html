@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260521_1') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 </head>
 <body>
@@ -61,7 +61,7 @@
                 <div class="dashboard-grid bento-grid">
                     <!-- Top Candidates -->
                     <div class="card card--featured">
-                        <h3>Top 30 Candidates</h3>
+                        <h3>Top 10 Candidates</h3>
                         <div id="top-candidates" class="candidates-list"></div>
                     </div>
 
@@ -272,9 +272,103 @@
                     <div id="activeJobAnalysisSummary" class="subtitle">No active job selected.</div>
                 </div>
 
+                <div class="card filters-card">
+                    <h3>Filter Current View</h3>
+                    <p class="subtitle">Filters apply only to the current top-N active job view.</p>
+
+                    <div class="filter-grid">
+                        <div class="filter-group">
+                            <label for="activeSearchInput">Search by Name/Email</label>
+                            <input type="text" id="activeSearchInput" placeholder="Enter name or email">
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeScoreRangeMin">Min Score (%)</label>
+                            <input type="number" id="activeScoreRangeMin" min="0" max="100" step="5">
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeScoreRangeMax">Max Score (%)</label>
+                            <input type="number" id="activeScoreRangeMax" min="0" max="100" step="5">
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeGenderFilter">Gender</label>
+                            <select id="activeGenderFilter">
+                                <option value="">All Genders</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeCountryFilter">Country</label>
+                            <input type="text" id="activeCountryFilter" placeholder="Enter country">
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeCityFilter">City</label>
+                            <input type="text" id="activeCityFilter" placeholder="Enter city">
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeEducationFilter">Education Level</label>
+                            <select id="activeEducationFilter">
+                                <option value="">All Education Levels</option>
+                                <option value="Degree">Degree</option>
+                                <option value="Masters">Masters</option>
+                                <option value="PhD">PhD</option>
+                                <option value="Diploma">Diploma</option>
+                                <option value="Unknown">Unknown</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeSkillFilter">Skill</label>
+                            <input type="text" id="activeSkillFilter" placeholder="Enter skill">
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeMinExperience">Min Experience (years)</label>
+                            <input type="number" id="activeMinExperience" min="0" max="50" step="1">
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="activeDriverLicenseFilter">Driver's License</label>
+                            <select id="activeDriverLicenseFilter">
+                                <option value="">Any</option>
+                                <option value="true">Has License</option>
+                                <option value="false">No License</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="filter-actions">
+                        <button class="btn-primary" onclick="applyActiveFilters()">Apply Filters</button>
+                        <button class="btn-secondary" onclick="resetActiveFilters()">Reset</button>
+                    </div>
+                </div>
+
                 <div class="dashboard-grid">
                     <div class="card">
-                        <h3>Top 30 Ranked Candidates</h3>
+                        <h3>Top Ranked Candidates</h3>
+                            <div class="active-top-control">
+                                <label for="activeTopCount">Show top</label>
+                                <select id="activeTopCount" class="active-top-selector" aria-label="Show top candidates">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="15">15</option>
+                                <option value="20" selected>20</option>
+                                <option value="25">25</option>
+                                <option value="30">30</option>
+                                <option value="35">35</option>
+                                <option value="40">40</option>
+                                <option value="45">45</option>
+                                <option value="50">50</option>
+                            </select>
+
+                            </div>
                         <div id="activeJobTopCandidates"></div>
                     </div>
 
@@ -393,6 +487,6 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js', v='20260519_3') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js', v='20260521_6') }}"></script>
 </body>
 </html>

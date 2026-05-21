@@ -483,7 +483,7 @@ def build_active_job_report(job: dict) -> dict:
         'bands': band_counts,
         'matched_keywords': matched_keywords[:50],
         'missing_keywords': missing_keywords[:50],
-        'top_candidates': ranked_candidates[:30],
+        'top_candidates': ranked_candidates[:50],
         'requirement_keywords': sorted(job_keywords)[:50],
     }
 
