@@ -45,13 +45,13 @@ function initActiveJobControls() {
             // constrain to valid values (5..50 step 5)
             state.activeTopCount = Math.min(50, Math.max(5, Math.round(val / 5) * 5));
             topEl.value = String(state.activeTopCount);
-            renderActiveJobReport();
+            loadActiveJobReport();
             renderActiveJobMatches();
         });
     }
 }
 
-function applyActiveFilters() {
+async function applyActiveFilters() {
     const topEl = document.getElementById('activeTopCount');
     const searchEl = document.getElementById('activeSearchInput');
     const minScoreEl = document.getElementById('activeScoreRangeMin');
@@ -78,11 +78,19 @@ function applyActiveFilters() {
         has_driver_license: driverEl ? driverEl.value : ''
     };
 
-    renderActiveJobReport();
-    renderActiveJobMatches();
+    console.log('applyActiveFilters', { filters: state.activeJobFilters, topCount: state.activeTopCount });
+
+    await loadActiveJobReport();
+    await awaitPromiseLoadActiveMatches();
 }
 
-function resetActiveFilters() {
+// Small helper to call loadActiveJobMatches and await it from non-async contexts
+function awaitPromiseLoadActiveMatches() {
+    // loadActiveJobMatches returns a promise; return it so callers can await
+    return loadActiveJobMatches();
+}
+
+async function resetActiveFilters() {
     const topEl = document.getElementById('activeTopCount');
 
     if (topEl) topEl.value = '20';
@@ -95,8 +103,8 @@ function resetActiveFilters() {
 
     state.activeTopCount = 20;
     state.activeJobFilters = {};
-    renderActiveJobReport();
-    renderActiveJobMatches();
+    await loadActiveJobReport();
+    await awaitPromiseLoadActiveMatches();
 }
 
 function _candidatePassesActiveFilters(candidate, filters) {
@@ -140,9 +148,23 @@ function _candidatePassesActiveFilters(candidate, filters) {
         if (exp < filters.min_experience) return false;
     }
     if (filters.has_driver_license) {
-        const drv = String(candidate['Has Driver License'] || candidate['has_driver_license'] || '').toLowerCase();
-        if (filters.has_driver_license === 'true' && drv !== 'true') return false;
-        if (filters.has_driver_license === 'false' && drv === 'true') return false;
+        // Support multiple possible field names and numeric values (1/0)
+        const drvRaw = (candidate["Has Driver's License"] !== undefined)
+            ? candidate["Has Driver's License"]
+            : (candidate['Has Driver License'] !== undefined)
+                ? candidate['Has Driver License']
+                : (candidate.has_driver_license !== undefined)
+                    ? candidate.has_driver_license
+                    : (candidate['has_driver_license'] !== undefined)
+                        ? candidate['has_driver_license']
+                        : '';
+
+        const drv = String(drvRaw || '').toLowerCase();
+        const drvBool = drv === 'true' || drv === '1' || drv === 'yes';
+        const drvFalse = drv === 'false' || drv === '0' || drv === 'no' || drv === '';
+
+        if (String(filters.has_driver_license) === 'true' && !drvBool) return false;
+        if (String(filters.has_driver_license) === 'false' && drvBool) return false;
     }
     return true;
 }
@@ -441,7 +463,8 @@ async function deleteJob(encodedJobId, event) {
 
 async function loadActiveJobMatches() {
     try {
-        const response = await fetch('/api/jobs/active/matches');
+        const params = new URLSearchParams();
+        const response = await fetch(`/api/jobs/active/matches${params.toString() ? ('?' + params.toString()) : ''}`);
         const result = await response.json();
         if (!response.ok || !result.success) {
             return;
@@ -457,8 +480,14 @@ async function loadActiveJobMatches() {
 
 async function loadActiveJobReport() {
     try {
-        const response = await fetch('/api/jobs/active/report');
+        const params = new URLSearchParams();
+        const topEl = document.getElementById('activeTopCount');
+        const topN = topEl ? (parseInt(topEl.value, 10) || state.activeTopCount || 20) : (state.activeTopCount || 20);
+        params.set('top_n', String(topN));
+        console.log('loadActiveJobReport: requesting', params.toString());
+        const response = await fetch(`/api/jobs/active/report${params.toString() ? `?${params.toString()}` : ''}`);
         const result = await response.json();
+        console.log('loadActiveJobReport: response', { ok: response.ok, status: response.status, success: result && result.success, top_candidates: (result && result.top_candidates && result.top_candidates.length) || 0 });
         if (!response.ok || !result.success) {
             return;
         }
@@ -472,6 +501,7 @@ async function loadActiveJobReport() {
 
 function renderActiveJobReport() {
     const report = state.activeJobReport;
+    console.log('renderActiveJobReport', { reportExists: !!report, jobId: report && report.job && report.job['Job ID'], top_candidates: (report && report.top_candidates && report.top_candidates.length) || 0 });
     const summary = document.getElementById('activeJobAnalysisSummary');
     const topCandidatesContainer = document.getElementById('activeJobTopCandidates');
     const keywords = document.getElementById('activeJobKeywords');
@@ -500,24 +530,23 @@ function renderActiveJobReport() {
     const matchedKeywords = report.matched_keywords || [];
     const missingKeywords = report.missing_keywords || [];
     const topCandidates = report.top_candidates || [];
+    const activeFilters = state.activeJobFilters || {};
 
     const topCount = Number((document.getElementById('activeTopCount') && document.getElementById('activeTopCount').value) || state.activeTopCount || 20);
 
+    const currentViewCandidates = topCandidates.filter(Boolean).slice(0, Math.min(topCount, 50));
+    const filteredTopCandidates = currentViewCandidates.filter((candidate) => _candidatePassesActiveFilters(candidate, activeFilters));
+
     summary.textContent = `Active job: ${job['Job Title'] || 'Untitled'} | ${totals.ranked_candidates || 0} CVs ranked`;
 
-    // Start from the top N, then apply active-job filters to that subset.
-    let candidatesSlice = topCandidates.slice(0, Math.min(topCount, 50));
-    const filters = state.activeJobFilters || {};
-    if (filters && Object.keys(filters).length) {
-        candidatesSlice = candidatesSlice.filter((candidate) => _candidatePassesActiveFilters(candidate, filters));
-    }
+    const candidatesSlice = filteredTopCandidates;
 
     const topCandidatesRows = candidatesSlice.length
         ? candidatesSlice.map((candidate, index) => `
             <div class="candidate-item" style="align-items: stretch; gap: 12px; flex-direction: column;">
                 <div style="display:flex; justify-content:space-between; gap: 12px; align-items:flex-start;">
                     <div class="candidate-info" style="min-width: 0;">
-                        <div class="candidate-name">${index + 1}. ${escapeHtml(candidate.Name || 'N/A')}</div>
+                        <div class="candidate-name">${index + 1}. ${escapeHtml(candidate.Name || `${candidate['First Name'] || ''} ${candidate['Last Name'] || ''}`.trim() || 'N/A')}</div>
                         <div class="candidate-email">${escapeHtml(candidate.Email || 'No email on file')}</div>
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
@@ -610,18 +639,15 @@ function renderActiveJobMatches() {
         return;
     }
 
-    summary.textContent = `Active job: ${state.activeJob['Job Title'] || 'Untitled'} (${state.activeMatches.length} matched candidate(s))`;
+    const topCount = state.activeTopCount || 20;
+    const currentViewMatches = state.activeMatches.filter(Boolean).slice(0, Math.min(topCount, 50));
+    const matchesSlice = currentViewMatches.filter((candidate) => _candidatePassesActiveFilters(candidate, state.activeJobFilters || {}));
 
-    if (!state.activeMatches.length) {
+    summary.textContent = `Active job: ${state.activeJob['Job Title'] || 'Untitled'} (${matchesSlice.length} matched candidate(s) in current view)`;
+
+    if (!matchesSlice.length) {
         container.innerHTML = '<div class="empty-state">No matches yet for the active job.</div>';
         return;
-    }
-
-    const topCount = state.activeTopCount || 20;
-    let matchesSlice = state.activeMatches.slice(0, Math.min(topCount, 50));
-    const filters = state.activeJobFilters || {};
-    if (filters && Object.keys(filters).length) {
-        matchesSlice = matchesSlice.filter(c => _candidatePassesActiveFilters(c, filters));
     }
 
     const rows = matchesSlice
@@ -1277,6 +1303,10 @@ async function openCandidateModal(encodedEmail) {
 }
 
 function candidateIdentifier(candidate) {
+    if (!candidate || typeof candidate !== 'object') {
+        return '';
+    }
+
     const email = candidate['Email'] || '';
     if (email) {
         return email;

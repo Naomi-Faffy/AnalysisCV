@@ -329,7 +329,93 @@ def _with_cv_availability(candidate: dict) -> dict:
     return candidate_data
 
 
-def build_active_job_report(job: dict) -> dict:
+def _parse_active_job_filters(args) -> dict:
+    filters = {}
+    if args.get('min_score'):
+        try:
+            filters['min_score'] = float(args.get('min_score'))
+        except Exception:
+            pass
+    if args.get('max_score'):
+        try:
+            filters['max_score'] = float(args.get('max_score'))
+        except Exception:
+            pass
+    if args.get('gender'):
+        filters['gender'] = args.get('gender')
+    if args.get('country'):
+        filters['country'] = args.get('country')
+    if args.get('city'):
+        filters['city'] = args.get('city')
+    if args.get('skill'):
+        filters['skill'] = args.get('skill')
+    if args.get('education_level'):
+        filters['education_level'] = args.get('education_level')
+    if args.get('search'):
+        filters['search'] = args.get('search')
+    if args.get('min_experience'):
+        try:
+            filters['min_experience'] = int(args.get('min_experience'))
+        except Exception:
+            pass
+    if args.get('has_driver_license'):
+        filters['has_driver_license'] = args.get('has_driver_license')
+    return filters
+
+
+def _candidate_passes_filters(candidate: dict, filters: dict) -> bool:
+    if not filters:
+        return True
+
+    if filters.get('min_score') is not None:
+        if float(candidate.get('Final Score (%)', 0) or 0) < float(filters['min_score']):
+            return False
+    if filters.get('max_score') is not None:
+        if float(candidate.get('Final Score (%)', 0) or 0) > float(filters['max_score']):
+            return False
+    if filters.get('gender'):
+        if str(candidate.get('Gender', '') or '').strip().lower() != str(filters['gender']).strip().lower():
+            return False
+    if filters.get('country'):
+        if str(filters['country']).strip().lower() not in str(candidate.get('Country', '') or '').strip().lower():
+            return False
+    if filters.get('city'):
+        if str(filters['city']).strip().lower() not in str(candidate.get('City', '') or '').strip().lower():
+            return False
+    if filters.get('education_level'):
+        if str(filters['education_level']).strip().lower() not in str(candidate.get('Education Level', '') or '').strip().lower():
+            return False
+    if filters.get('min_experience') is not None:
+        candidate_experience = pd.to_numeric(candidate.get('Years of Experience', 0), errors='coerce')
+        if pd.isna(candidate_experience):
+            candidate_experience = 0
+        if float(candidate_experience) < float(filters['min_experience']):
+            return False
+    if filters.get('skill'):
+        skill_value = str(filters['skill']).strip().lower()
+        skills_text = str(candidate.get('Skills', '') or '').strip().lower()
+        if skill_value not in skills_text:
+            return False
+    if filters.get('search'):
+        search_value = str(filters['search']).strip().lower()
+        full_name = f"{candidate.get('First Name', '')} {candidate.get('Last Name', '')}".strip().lower()
+        email = str(candidate.get('Email', '') or '').strip().lower()
+        if search_value not in full_name and search_value not in email:
+            return False
+    if filters.get('has_driver_license'):
+        license_value = str(filters['has_driver_license']).strip().lower()
+        raw_license = candidate.get("Has Driver's License", candidate.get('Has Driver License', ''))
+        normalized = str(raw_license).strip().lower()
+        has_license = normalized in {'1', 'true', 'yes'}
+        if license_value in {'true', '1', 'yes'} and not has_license:
+            return False
+        if license_value in {'false', '0', 'no'} and has_license:
+            return False
+
+    return True
+
+
+def build_active_job_report(job: dict, filters: dict = None, top_n: int = 50) -> dict:
     def safe_value(value):
         if pd.isna(value):
             return ''
@@ -375,10 +461,6 @@ def build_active_job_report(job: dict) -> dict:
             'top_candidates': [],
             'requirement_keywords': [],
         }
-
-    job_id = str(job.get('Job ID', '') or '').strip()
-    if 'Applied Job ID' in df.columns:
-        df = df[df['Applied Job ID'].fillna('').astype(str) == job_id].copy()
 
     if df.empty:
         return {
@@ -442,6 +524,14 @@ def build_active_job_report(job: dict) -> dict:
             'Name': f"{row.get('First Name', '')} {row.get('Last Name', '')}".strip(),
             'Email': safe_value(row.get('Email', '')),
             'Phone': safe_value(row.get('Phone', '')),
+            'Gender': safe_value(row.get('Gender', '')),
+            'Country': safe_value(row.get('Country', '')),
+            'City': safe_value(row.get('City', '')),
+            'Education Level': safe_value(row.get('Education Level', '')),
+            'Years of Experience': safe_value(row.get('Years of Experience', '')),
+            'Current Role': safe_value(row.get('Current Role', '')),
+            'Skills': safe_value(row.get('Skills', '')),
+            'Has Driver\'s License': safe_value(row.get('Has Driver\'s License', '')),
             'CV File Name': safe_value(row.get('CV File Name', '')),
             'CV Available': bool(_resolve_uploaded_file(row.get('CV File Name', ''), candidate_hint={
                 'First Name': row.get('First Name', ''),
@@ -465,6 +555,12 @@ def build_active_job_report(job: dict) -> dict:
     avg_match = round(sum(item['Match Score (%)'] for item in ranked_candidates) / total, 2) if total else 0
     avg_coverage = round(sum(item['Coverage (%)'] for item in ranked_candidates) / total, 2) if total else 0
 
+    top_limit = max(int(top_n or 50), 1)
+    visible_candidates = ranked_candidates
+    if filters:
+        visible_candidates = [candidate for candidate in ranked_candidates if _candidate_passes_filters(candidate, filters)]
+    visible_candidates = visible_candidates[:top_limit]
+
     matched_keywords = sorted(job_keywords & all_candidate_terms)
     missing_keywords = sorted(job_keywords - all_candidate_terms)
 
@@ -483,7 +579,7 @@ def build_active_job_report(job: dict) -> dict:
         'bands': band_counts,
         'matched_keywords': matched_keywords[:50],
         'missing_keywords': missing_keywords[:50],
-        'top_candidates': ranked_candidates[:50],
+        'top_candidates': visible_candidates,
         'requirement_keywords': sorted(job_keywords)[:50],
     }
 
@@ -714,7 +810,68 @@ def get_active_job_matches():
         if not job:
             return jsonify({'success': True, 'job': {}, 'candidates': [], 'total': 0}), 200
 
-        candidates = excel_manager.filter_candidates({'applied_job_id': job.get('Job ID', '')})
+        # Allow optional filtering parameters (same as /api/candidates) to be passed
+        # so the Active Job matches endpoint can return server-filtered results.
+        def _parse_filters(args):
+            f = {}
+            if args.get('min_score'):
+                try:
+                    f['min_score'] = float(args.get('min_score'))
+                except Exception:
+                    pass
+            if args.get('max_score'):
+                try:
+                    f['max_score'] = float(args.get('max_score'))
+                except Exception:
+                    pass
+            if args.get('gender'):
+                f['gender'] = args.get('gender')
+            if args.get('country'):
+                f['country'] = args.get('country')
+            if args.get('city'):
+                f['city'] = args.get('city')
+            if args.get('skill'):
+                f['skill'] = args.get('skill')
+            if args.get('education_level'):
+                f['education_level'] = args.get('education_level')
+            if args.get('search'):
+                f['search'] = args.get('search')
+            if args.get('min_experience'):
+                try:
+                    f['min_experience'] = int(args.get('min_experience'))
+                except Exception:
+                    pass
+            if args.get('has_driver_license'):
+                f['has_driver_license'] = args.get('has_driver_license')
+            if args.get('applied_job_title'):
+                f['applied_job_title'] = args.get('applied_job_title')
+            # always filter to the active job id
+            f['applied_job_id'] = job.get('Job ID', '')
+            return f
+
+        filters = _parse_filters(request.args)
+
+        # Some datasets may have candidates linked to jobs only by title
+        # (Applied Job ID empty). If no candidates exist for the active
+        # job by ID, fall back to filtering by the job title so users
+        # still see relevant matches.
+        job_id = str(job.get('Job ID', '') or '').strip()
+        has_by_id = False
+        try:
+            all_candidates = excel_manager.get_all_candidates()
+            for c in all_candidates:
+                if str(c.get('Applied Job ID', '') or '').strip() == job_id and job_id:
+                    has_by_id = True
+                    break
+        except Exception:
+            has_by_id = False
+
+        if not has_by_id and job.get('Job Title'):
+            # prefer title-based match when IDs are absent
+            filters.pop('applied_job_id', None)
+            filters['applied_job_title'] = job.get('Job Title')
+
+        candidates = excel_manager.filter_candidates(filters)
         candidates = sorted(candidates, key=lambda c: float(c.get('Match Score (%)', 0) or 0), reverse=True)
 
         return jsonify({
@@ -780,7 +937,13 @@ def download_active_job_matches():
 def get_active_job_report():
     try:
         job = jobs_manager.get_active_job()
-        report = build_active_job_report(job)
+        filters = _parse_active_job_filters(request.args)
+        top_n = request.args.get('top_n', 50)
+        try:
+            top_n = int(top_n)
+        except Exception:
+            top_n = 50
+        report = build_active_job_report(job, filters=filters, top_n=top_n)
         return jsonify(report), 200
     except Exception as e:
         print(f"Error in get_active_job_report: {e}")
