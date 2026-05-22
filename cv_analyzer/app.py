@@ -29,8 +29,10 @@ app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUNTIME_BASE_DIR = BASE_DIR
-UPLOAD_FOLDER = os.path.join(RUNTIME_BASE_DIR, 'uploads')
-DATA_FOLDER = os.getenv('CV_ANALYZER_DATA_DIR', os.path.join(RUNTIME_BASE_DIR, 'data'))
+DEFAULT_STORAGE_ROOT = '/var/data/cv-analyzer' if os.getenv('RENDER') else RUNTIME_BASE_DIR
+STORAGE_ROOT = os.getenv('CV_ANALYZER_STORAGE_DIR', DEFAULT_STORAGE_ROOT)
+DATA_FOLDER = os.getenv('CV_ANALYZER_DATA_DIR', os.path.join(STORAGE_ROOT, 'data'))
+UPLOAD_FOLDER = os.getenv('CV_ANALYZER_UPLOAD_DIR', os.path.join(STORAGE_ROOT, 'uploads'))
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per individual file
 MAX_BATCH_SIZE = 300 * 1024 * 1024  # 300MB for batch uploads (~20 CVs)
@@ -50,6 +52,52 @@ blob_storage_client = BlobStorageClient()
 # Ensure folders exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
+
+
+def _migrate_legacy_storage_once():
+    """Migrate old local data/uploads into configured storage if destination is empty."""
+    legacy_data_dir = os.path.join(RUNTIME_BASE_DIR, 'data')
+    legacy_upload_dir = os.path.join(RUNTIME_BASE_DIR, 'uploads')
+
+    if os.path.abspath(DATA_FOLDER) != os.path.abspath(legacy_data_dir):
+        for filename in ['applicants.xlsx', 'jobs.xlsx', 'master_skills.json']:
+            legacy_file = os.path.join(legacy_data_dir, filename)
+            target_file = os.path.join(DATA_FOLDER, filename)
+            if os.path.exists(legacy_file) and not os.path.exists(target_file):
+                try:
+                    shutil.copy2(legacy_file, target_file)
+                except Exception as exc:
+                    print(f"Warning: failed to migrate {legacy_file} -> {target_file}: {exc}")
+
+    if os.path.abspath(UPLOAD_FOLDER) != os.path.abspath(legacy_upload_dir):
+        try:
+            target_has_files = any(
+                os.path.isfile(os.path.join(UPLOAD_FOLDER, name))
+                for name in os.listdir(UPLOAD_FOLDER)
+            )
+        except Exception:
+            target_has_files = False
+
+        if not target_has_files and os.path.exists(legacy_upload_dir):
+            for filename in os.listdir(legacy_upload_dir):
+                legacy_file = os.path.join(legacy_upload_dir, filename)
+                target_file = os.path.join(UPLOAD_FOLDER, filename)
+                if os.path.isfile(legacy_file) and not os.path.exists(target_file):
+                    try:
+                        shutil.copy2(legacy_file, target_file)
+                    except Exception as exc:
+                        print(f"Warning: failed to migrate {legacy_file} -> {target_file}: {exc}")
+
+
+_migrate_legacy_storage_once()
+
+print(
+    "[startup] storage configured "
+    f"render={bool(os.getenv('RENDER'))} "
+    f"storage_root={STORAGE_ROOT} "
+    f"data_dir={DATA_FOLDER} "
+    f"upload_dir={UPLOAD_FOLDER}"
+)
 
 try:
     excel_manager.refresh_candidate_scores(scoring_system, jobs_manager)
@@ -1220,10 +1268,13 @@ def debug_storage():
         return jsonify({
             'success': True,
             'paths': {
+                'storage_root': STORAGE_ROOT,
+                'upload_folder': UPLOAD_FOLDER,
                 'applicants_file': APPLICANTS_FILE,
                 'jobs_file': JOBS_FILE,
             },
             'exists': {
+                'uploads_dir': os.path.exists(UPLOAD_FOLDER),
                 'applicants': os.path.exists(APPLICANTS_FILE),
                 'jobs': os.path.exists(JOBS_FILE),
             },
