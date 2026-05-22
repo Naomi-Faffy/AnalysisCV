@@ -29,7 +29,7 @@ app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUNTIME_BASE_DIR = BASE_DIR
-DEFAULT_STORAGE_ROOT = '/var/data/cv-analyzer' if os.getenv('RENDER') else RUNTIME_BASE_DIR
+DEFAULT_STORAGE_ROOT = os.path.join(RUNTIME_BASE_DIR, 'persistent_storage') if os.getenv('RENDER') else RUNTIME_BASE_DIR
 STORAGE_ROOT = os.getenv('CV_ANALYZER_STORAGE_DIR', DEFAULT_STORAGE_ROOT)
 DATA_FOLDER = os.getenv('CV_ANALYZER_DATA_DIR', os.path.join(STORAGE_ROOT, 'data'))
 UPLOAD_FOLDER = os.getenv('CV_ANALYZER_UPLOAD_DIR', os.path.join(STORAGE_ROOT, 'uploads'))
@@ -90,6 +90,25 @@ def _migrate_legacy_storage_once():
 
 
 _migrate_legacy_storage_once()
+
+
+def _assert_storage_writable(paths):
+    """Fail fast when configured storage paths are not writable."""
+    for path in paths:
+        os.makedirs(path, exist_ok=True)
+        probe = os.path.join(path, '.write_probe')
+        try:
+            with open(probe, 'w', encoding='utf-8') as handle:
+                handle.write('ok')
+            os.remove(probe)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Storage path is not writable: {path}. "
+                "Check Render disk mountPath and CV_ANALYZER_* environment variables."
+            ) from exc
+
+
+_assert_storage_writable([STORAGE_ROOT, DATA_FOLDER, UPLOAD_FOLDER])
 
 print(
     "[startup] storage configured "
