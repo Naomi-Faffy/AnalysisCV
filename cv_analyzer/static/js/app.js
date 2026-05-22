@@ -1148,6 +1148,11 @@ function renderCandidatesTable(containerId, candidates, includeActions) {
         return;
     }
 
+    if (containerId === 'filteredTable') {
+        renderFilteredCandidateCards(container, candidates);
+        return;
+    }
+
     const isAllCandidatesView = containerId === 'candidatesTable';
     const pageKey = containerId === 'filteredTable' ? 'filteredCandidatePage' : 'candidatePage';
     const totalPages = Math.max(1, Math.ceil(candidates.length / CANDIDATES_PAGE_SIZE));
@@ -1230,6 +1235,68 @@ function renderCandidatesTable(containerId, candidates, includeActions) {
             </thead>
             <tbody>${rows}</tbody>
         </table>
+        ${pagination}
+    `;
+}
+
+function renderFilteredCandidateCards(container, candidates) {
+    const pageKey = 'filteredCandidatePage';
+    const totalPages = Math.max(1, Math.ceil(candidates.length / CANDIDATES_PAGE_SIZE));
+    const requestedPage = Number(state[pageKey] || 1);
+    const currentPage = Math.min(Math.max(1, requestedPage), totalPages);
+    state[pageKey] = currentPage;
+    const startIndex = (currentPage - 1) * CANDIDATES_PAGE_SIZE;
+    const pageCandidates = candidates.slice(startIndex, startIndex + CANDIDATES_PAGE_SIZE);
+
+    const rows = pageCandidates
+        .map((candidate, index) => {
+            const identifier = candidateIdentifier(candidate);
+            const name = `${candidate['First Name'] || ''} ${candidate['Last Name'] || ''}`.trim() || candidate.Name || 'N/A';
+            const email = candidate['Email'] || 'No email on file';
+            const score = Number(candidate['Final Score (%)'] || 0).toFixed(1);
+            const matchScore = Number(candidate['Match Score (%)'] || 0).toFixed(1);
+            const resumeBtn = `<a class="btn-resume btn-small" href="/api/download-candidate-cv/${encodeURIComponent(identifier)}" target="_blank" rel="noopener noreferrer">Resume</a>`;
+
+            return `
+                <div class="candidate-item candidate-card" style="align-items: stretch; gap: 12px; flex-direction: column;">
+                    <div style="display:flex; justify-content:space-between; gap: 12px; align-items:flex-start;">
+                        <div class="candidate-info" style="min-width: 0;">
+                            <div class="candidate-name">${index + startIndex + 1}. ${escapeHtml(name)}</div>
+                            <div class="candidate-email">${escapeHtml(email)}</div>
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                            <button class="btn-primary btn-small" onclick="openCandidateModal('${encodeURIComponent(identifier)}')">View</button>
+                            ${resumeBtn}
+                        </div>
+                    </div>
+                    <div class="candidate-card-chips">
+                        <span class="job-pill">CV Score: ${score}%</span>
+                        <span class="job-pill">Match Score: ${matchScore}%</span>
+                    </div>
+                </div>
+            `;
+        })
+        .join('');
+
+    const pagination = totalPages > 1
+        ? `
+            <div class="pagination-bar">
+                <div class="pagination-info">
+                    Showing ${startIndex + 1}-${Math.min(startIndex + CANDIDATES_PAGE_SIZE, candidates.length)} of ${candidates.length}
+                </div>
+                <div class="pagination-actions">
+                    <button class="btn-secondary pagination-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="goToCandidatePage('filteredTable', ${currentPage - 1})">Prev</button>
+                    <span class="pagination-page">Page ${currentPage} of ${totalPages}</span>
+                    <button class="btn-secondary pagination-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToCandidatePage('filteredTable', ${currentPage + 1})">Next</button>
+                </div>
+            </div>
+        `
+        : '';
+
+    container.innerHTML = `
+        <div class="candidate-results-grid">
+            ${rows}
+        </div>
         ${pagination}
     `;
 }

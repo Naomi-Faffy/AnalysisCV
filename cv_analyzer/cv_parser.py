@@ -684,33 +684,15 @@ class CVParser:
 
         return sorted(found_skills)
     def extract_driver_license(self, text: str) -> bool:
-        """Check if CV mentions driver's license or driving experience.
+        """Check whether the CV explicitly mentions a driver's license.
 
-        Accept common spelling variants (license / licence) and several
-        phrase patterns such as "driving licence", "driver's permit",
-        "licensed driver", or licence classes.
+        Only the exact driver's license/licence phrase qualifies, with any
+        letter casing allowed.
         """
         if not text:
             return False
 
-        driver_patterns = [
-            r"\bdriver'?s?\s+licen[cs]e\b",
-            r"\bdriver'?s?\s+permit\b",
-            r"\bvalid\s+driver'?s?\s+licen[cs]e\b",
-            r"\bdriving\s+licen[cs]e\b",
-            r"\bdriving\s+permit\b",
-            r"\bPDP\b",  # Professional Driver's Permit
-            r"\bclass\s+[a-z0-9]+\b",  # class C, class 2, etc.
-            r"\blicensed\s+driver\b",
-            r"\bholds?\s+(a\s+)?driving\s+licen[cs]e\b",
-            r"\bfull\s+driving\s+licen[cs]e\b",
-        ]
-
-        for pattern in driver_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                return True
-
-        return False
+        return bool(re.search(r"\bdriver[\'’]s\s+licen[cs]e\b", text, re.IGNORECASE))
     
     def parse_with_pyresparser(self, file_path: str) -> List[str]:
         """Use pyresparser to extract fields if available. Returns a list of skills or empty list."""

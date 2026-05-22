@@ -638,6 +638,30 @@ tbody tr:hover {
     margin-bottom: 12px;
 }
 
+#filteredTable .candidate-results-grid {
+    display: grid;
+    gap: 12px;
+}
+
+#filteredTable .candidate-item,
+.candidate-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.58), rgba(235,242,255,0.72));
+    border: 1px solid rgba(48, 88, 166, 0.12);
+    box-shadow: 0 10px 22px rgba(34, 72, 154, 0.08);
+    padding: 12px;
+    border-radius: 12px;
+}
+
+#filteredTable .candidate-card-chips {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+#filteredTable .pagination-bar {
+    margin-top: 14px;
+}
+
 #activeJobTopCandidates .candidate-name {
     color: var(--ink-900);
 }
