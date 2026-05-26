@@ -10,12 +10,12 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.11
       - key: CV_ANALYZER_STORAGE_DIR
-        value: /opt/render/project/src/cv_analyzer/persistent_storage
+        value: /opt/render/project/src/cv_analyzer/data
       - key: CV_ANALYZER_DATA_DIR
-        value: /opt/render/project/src/cv_analyzer/persistent_storage/data
+        value: /opt/render/project/src/cv_analyzer/data
       - key: CV_ANALYZER_UPLOAD_DIR
-        value: /opt/render/project/src/cv_analyzer/persistent_storage/uploads
+        value: /opt/render/project/src/cv_analyzer/data/uploads
     disks:
       - name: cv-analyzer-data
-        mountPath: /opt/render/project/src/cv_analyzer/persistent_storage
+        mountPath: /opt/render/project/src/cv_analyzer/data
         sizeGB: 1

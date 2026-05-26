@@ -29,10 +29,10 @@ app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUNTIME_BASE_DIR = BASE_DIR
-DEFAULT_STORAGE_ROOT = os.path.join(RUNTIME_BASE_DIR, 'persistent_storage') if os.getenv('RENDER') else RUNTIME_BASE_DIR
+DEFAULT_STORAGE_ROOT = os.path.join(RUNTIME_BASE_DIR, 'data') if os.getenv('RENDER') else os.path.join(RUNTIME_BASE_DIR, 'data')
 STORAGE_ROOT = os.getenv('CV_ANALYZER_STORAGE_DIR', DEFAULT_STORAGE_ROOT)
-DATA_FOLDER = os.getenv('CV_ANALYZER_DATA_DIR', os.path.join(STORAGE_ROOT, 'data'))
-UPLOAD_FOLDER = os.getenv('CV_ANALYZER_UPLOAD_DIR', os.path.join(STORAGE_ROOT, 'uploads'))
+DATA_FOLDER = os.getenv('CV_ANALYZER_DATA_DIR', STORAGE_ROOT)
+UPLOAD_FOLDER = os.getenv('CV_ANALYZER_UPLOAD_DIR', os.path.join(DATA_FOLDER, 'uploads'))
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per individual file
 MAX_BATCH_SIZE = 300 * 1024 * 1024  # 300MB for batch uploads (~20 CVs)
