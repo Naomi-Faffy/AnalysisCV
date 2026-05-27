@@ -103,35 +103,32 @@ The job-aware analysis adds:
 - Batch upload endpoint: `/api/upload-cvs`.
 - Direct filtered export download endpoint: `/api/export-download`.
 
-## Deploy To Render
+## Deploy To cPanel
 
-Recommended service type:
+Use the Python App / Setup Python App feature in cPanel.
 
-- Web Service (Python)
+Recommended setup:
+
+- Application root: the project root
+- Application startup file: `passenger_wsgi.py`
+- Application entry point: `application`
 
 Repository requirements already in place:
 
 - Root `requirements.txt` points to `cv_analyzer/requirements.txt`
 - Root `runtime.txt` pins Python 3.11.11
 
-Render settings:
+Install dependencies in the cPanel virtual environment:
 
-- Build Command:
-  - `pip install -r requirements.txt`
-- Start Command:
-  - `gunicorn --chdir cv_analyzer app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120`
+```bash
+pip install -r requirements.txt
+```
 
-Environment variables:
+Storage notes:
 
-- `PYTHON_VERSION=3.11.11`
-- `CV_ANALYZER_DATA_DIR=/opt/render/project/src/cv_analyzer/data`
+- The app stores applicant/job data in `cv_analyzer/data`
+- Uploaded CV files are stored in `cv_analyzer/data/uploads`
+- Make sure the application user has write access to the project folder
+- If you need persistence across redeploys, keep the project folder on cPanel hosting and do not store files in a temporary directory
 
-Instance size guidance:
-
-- Minimum for testing: 1 vCPU / 1 GB RAM
-- Recommended baseline: 2 vCPU / 2 GB RAM
-
-Important storage note:
-
-- This app stores applicant/job data in local Excel files under `cv_analyzer/data`.
-- Use a persistent disk on Render and mount it to the app path so files survive restarts and redeploys.
+If your cPanel hosting uses a different app root, place `passenger_wsgi.py` in that root and keep the `cv_analyzer` folder next to it.

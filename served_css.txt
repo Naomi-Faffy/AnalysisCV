@@ -31,13 +31,11 @@ body {
         radial-gradient(circle at 80% 88%, rgba(148, 163, 184, 0.22), transparent 35%),
         linear-gradient(160deg, #f3f6fc 0%, #e9eff8 45%, #f5f8fd 100%);
     line-height: 1.45;
-    overflow-x: hidden;
 }
 
 .container {
     min-height: 100vh;
     display: flex;
-    position: relative;
 }
 
 .sidebar {
@@ -52,29 +50,6 @@ body {
     -webkit-backdrop-filter: blur(22px) saturate(140%);
     padding: 24px 14px;
     box-shadow: 0 22px 48px rgba(11, 24, 57, 0.3);
-}
-
-.sidebar-toggle {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 999px;
-    padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #f8fbff;
-    font: inherit;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 10px 24px rgba(3, 7, 15, 0.16);
-}
-
-.hero-heading {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-    min-width: 0;
 }
 
 .logo {
@@ -124,7 +99,7 @@ body.admin-page .admin-back-link {
     color: #ffffff;
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 10px;
-    background: linear-gradient(180deg, rgba(14, 24, 42, 0.92), rgba(10, 17, 31, 0.82)), rgba(9, 14, 25, 0.72);
+    background: var(--primary-dark);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -192,7 +167,6 @@ body.admin-page .admin-back-link {
     margin-left: 308px;
     width: calc(100% - 308px);
     padding: 24px;
-    min-width: 0;
 }
 
 .top-bar {
@@ -316,8 +290,8 @@ body.admin-page::before {
 }
 
 .admin-header {
-    /* Use the exact requested darker gradient for admin header */
-    background: linear-gradient(180deg, rgba(14, 24, 42, 0.92), rgba(10, 17, 31, 0.82)), rgba(9, 14, 25, 0.72);
+    /* Use the darker primary shade for admin header */
+    background: var(--primary-dark);
     color: #f8fbff;
     border: 1px solid rgba(255, 255, 255, 0.22);
     box-shadow: 0 18px 40px rgba(11, 24, 57, 0.2);
@@ -352,17 +326,6 @@ body.admin-page::before {
     padding: 0.55rem 0.85rem;
     width: auto;
     flex: 0 0 auto;
-}
-
-/* High-specificity override to ensure admin back-link uses the darker primary shade
-   (helps when browsers have cached older CSS or older markup is served). Remove
-   !important once visual parity is confirmed. */
-div.admin-shell div.top-bar.admin-header a.admin-back-link,
-body.admin-page .admin-header > a.admin-back-link,
-body.admin-page .admin-back-link {
-    background: linear-gradient(180deg, rgba(14, 24, 42, 0.92), rgba(10, 17, 31, 0.82)), rgba(9, 14, 25, 0.72);
-    border-color: rgba(255,255,255,0.08);
-    color: #ffffff;
 }
 
 /* Replace any stray leading arrow characters in older served HTML by
@@ -460,16 +423,6 @@ body.admin-page .nav-link.admin-back-link::after {
     color: #f2f6ff;
 }
 
-/* Ensure search-row uses flex layout for search input and buttons */
-.admin-stats .stat-card.search-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 12px;
-}
-.admin-stats .stat-card.search-row input#skillSearchInput { flex: 1; padding: 8px 10px; border-radius: 10px; }
-
 .stat-card .btn-primary {
     background: linear-gradient(130deg, rgba(46,204,113,0.88), rgba(39,174,96,0.84));
     color: #f8fbff;
@@ -525,15 +478,6 @@ body.admin-page .nav-link.admin-back-link::after {
         padding: 10px;
     }
 
-    body.admin-page .admin-header {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    body.admin-page .admin-back-link {
-        width: 100%;
-    }
-
     .admin-input-row,
     .admin-section-title {
         flex-direction: column;
@@ -546,10 +490,6 @@ body.admin-page .nav-link.admin-back-link::after {
 
     .admin-actions {
         flex-direction: column;
-    }
-
-    .admin-stats {
-        grid-template-columns: 1fr;
     }
 }
 
@@ -987,79 +927,6 @@ tbody tr:hover {
     border-radius: 12px;
 }
 
-/* Responsive breakpoints: make layout fluid on tablets and phones */
-@media (max-width: 1200px) {
-    .sidebar { width: 240px; }
-    .main-content { margin-left: 264px; width: calc(100% - 264px); }
-}
-
-@media (max-width: 900px) {
-    .sidebar {
-        width: min(320px, calc(100vw - 24px));
-        inset: 12px auto 12px 12px;
-        z-index: 40;
-        transform: translateX(-112%);
-        transition: transform 0.25s ease;
-    }
-
-    body.sidebar-open .sidebar {
-        transform: translateX(0);
-    }
-
-    .main-content {
-        margin-left: 0;
-        width: 100%;
-        padding: 12px;
-    }
-
-    .sidebar-toggle {
-        display: inline-flex;
-    }
-
-    .logo h1 { font-size: 18px; }
-    .nav-menu { display: flex; flex-wrap: wrap; gap: 8px; }
-    .nav-link { flex: 1 1 auto; }
-}
-
-@media (max-width: 640px) {
-    .container {
-        display: block;
-    }
-
-    .dashboard-grid { grid-template-columns: 1fr; }
-    .jobs-layout { grid-template-columns: 1fr; }
-    .job-form-grid { grid-template-columns: 1fr; }
-    .upload-area { padding: 28px 12px; }
-    .card { padding: 12px; }
-    .top-bar { padding: 12px; }
-    .stat-card { min-width: 120px; }
-    .logo-img { height: 34px; }
-
-    .hero-heading {
-        width: 100%;
-        justify-content: space-between;
-    }
-
-    .sidebar-toggle {
-        width: 100%;
-    }
-
-    .stats-summary {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 480px) {
-    body { font-size: 14px; }
-    .logo h1 { font-size: 16px; }
-    .btn-primary, .btn-secondary, .btn-danger { padding: 8px 12px; }
-    .admin-input-row { flex-direction: column; align-items: stretch; }
-    .admin-stats { grid-template-columns: 1fr; }
-    .top-bar.dashboard-hero { padding: 16px; }
-    .hero-heading h2 { font-size: 2rem; }
-    .stat-card { min-width: 0; }
-}
-
 #filteredTable .candidate-card-chips {
     display: flex;
     gap: 10px;
@@ -1448,7 +1315,6 @@ body::before {
     gap: 14px;
     width: min(640px, 100%);
     align-self: center;
-    min-width: 0;
 }
 
 .stat-card {
@@ -1757,7 +1623,6 @@ tbody tr:hover {
 
 canvas {
     max-height: 320px;
-    max-width: 100%;
 }
 
 @media (max-width: 920px) {

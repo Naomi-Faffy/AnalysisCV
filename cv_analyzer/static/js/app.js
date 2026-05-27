@@ -23,6 +23,7 @@ const chartPalette = [
 
 document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
+    initSidebarToggle();
     initUploadArea();
     initJobForm();
     bindFilterInputs();
@@ -193,6 +194,44 @@ function initNavigation() {
                 loadActiveJobReport();
             }
         });
+    });
+}
+
+function initSidebarToggle() {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.getElementById('sidebarToggle');
+
+    if (!sidebar || !toggle) {
+        return;
+    }
+
+    const syncState = (isOpen) => {
+        document.body.classList.toggle('sidebar-open', isOpen);
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    };
+
+    syncState(false);
+
+    toggle.addEventListener('click', () => {
+        syncState(!document.body.classList.contains('sidebar-open'));
+    });
+
+    sidebar.querySelectorAll('.nav-link').forEach((link) => {
+        link.addEventListener('click', () => {
+            syncState(false);
+        });
+    });
+
+    window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            syncState(false);
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 900) {
+            syncState(false);
+        }
     });
 }
 

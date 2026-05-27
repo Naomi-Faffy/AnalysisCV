@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+cv_analyzer/__pycache__/
+cv_analyzer/data/*.xlsx
+cv_analyzer/uploads/
+cv_analyzer/data/uploads/

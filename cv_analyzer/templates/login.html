@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Login</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260526_1') }}">
+  <style>
+    :root { --primary-dark: #22427f; }
+    html,body { height:100%; }
+    .login-page {
+      position:relative;
+      overflow:hidden;
+      display:flex; align-items:center; justify-content:center; min-height:100vh;
+      background:linear-gradient(180deg, rgba(14,24,42,0.92), rgba(10,17,31,0.82));
+      padding:28px;
+    }
+    .login-orb {
+      position:absolute;
+      border-radius:50%;
+      filter: blur(0.4px);
+      opacity:0.9;
+      pointer-events:none;
+      box-shadow:
+        inset 0 1px 18px rgba(255,255,255,0.26),
+        inset 0 -12px 20px rgba(0,0,0,0.18),
+        0 18px 45px rgba(0,0,0,0.28);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      animation: floatOrb 9s ease-in-out infinite;
+    }
+    .login-orb::before {
+      content:"";
+      position:absolute;
+      inset:12%;
+      border-radius:50%;
+      background:radial-gradient(circle at 30% 28%, rgba(255,255,255,0.52), rgba(255,255,255,0.06) 32%, transparent 68%);
+      mix-blend-mode:screen;
+    }
+    .login-orb--blue {
+      width:210px; height:210px; left:8%; top:13%;
+      background:radial-gradient(circle at 30% 30%, rgba(120,210,255,0.8), rgba(21,64,127,0.2) 58%, rgba(10,17,31,0.05) 78%);
+      animation-duration: 24s;
+    }
+    .login-orb--green {
+      width:170px; height:170px; right:10%; bottom:12%;
+      background:radial-gradient(circle at 30% 30%, rgba(136,255,171,0.82), rgba(21,96,64,0.2) 58%, rgba(10,17,31,0.05) 78%);
+      animation-duration: 26s;
+      animation-delay: -7s;
+    }
+    .login-orb--small-blue {
+      width:96px; height:96px; right:19%; top:16%;
+      background:radial-gradient(circle at 30% 30%, rgba(96,184,255,0.85), rgba(18,58,110,0.16) 58%, rgba(10,17,31,0.02) 78%);
+      animation-duration: 18s;
+      animation-delay: -4s;
+    }
+    .login-orb--small-green {
+      width:82px; height:82px; left:14%; bottom:18%;
+      background:radial-gradient(circle at 30% 30%, rgba(99,255,184,0.82), rgba(12,84,61,0.16) 58%, rgba(10,17,31,0.02) 78%);
+      animation-duration: 17s;
+      animation-delay: -6s;
+    }
+    @keyframes floatOrb {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+      25% { transform: translate3d(18px, -14px, 0) scale(1.03); }
+      50% { transform: translate3d(-12px, -32px, 0) scale(1.05); }
+      75% { transform: translate3d(14px, -18px, 0) scale(1.02); }
+    }
+    /* Bigger, centered glassmorphic card */
+    .login-card {
+      position:relative;
+      z-index:1;
+      width:100%; max-width:620px; background:rgba(255,255,255,0.05);
+      padding:36px 38px; border-radius:18px; box-shadow:0 14px 54px rgba(2,6,23,0.62);
+      border:1px solid rgba(255,255,255,0.1); backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px); color:#fff;
+    }
+    .login-card::before {
+      content:"";
+      position:absolute;
+      inset:-16px;
+      border-radius:26px;
+      background:linear-gradient(135deg, rgba(95,187,255,0.16), rgba(101,255,178,0.16), rgba(255,255,255,0.03));
+      filter: blur(22px);
+      opacity:0.92;
+      z-index:-2;
+    }
+    .login-card::after {
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:18px;
+      background:radial-gradient(circle at 50% 15%, rgba(255,255,255,0.1), transparent 35%);
+      z-index:-1;
+    }
+    .login-card .brand { display:flex; align-items:center; gap:16px; margin-bottom:18px }
+    .login-card .brand { flex-direction:column; justify-content:center; text-align:center }
+    .login-card .brand img { height:104px; width:auto; filter: drop-shadow(0 16px 34px rgba(0,0,0,0.38)); }
+    .login-card h2{ margin:0; font-size:26px; letter-spacing:1.4px; color:#ffffff; font-weight:800; text-align:center }
+    .login-card p.lead { display:none }
+    .login-card label{ display:block; margin-top:12px; font-size:13px; color:#d6dbea }
+    .login-card input{ width:100%; padding:12px 14px; margin-top:8px; border-radius:10px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.04); color:#fff }
+    .login-card input:focus{ outline:none; border-color:rgba(126,198,255,0.7); box-shadow:0 0 0 3px rgba(73,138,210,0.18) }
+    .form-actions{ margin-top:20px; text-align:center }
+    .btn{ background:linear-gradient(180deg,var(--primary-dark,#22427f), #15376a); color:#fff; border:none; padding:12px 28px; border-radius:999px; font-weight:700; font-size:15px; cursor:pointer; min-width:180px; box-shadow:0 12px 28px rgba(16,52,105,0.35) }
+    .btn:active{ transform:translateY(1px) }
+    .flash{ color:#ffd6d6; margin-bottom:8px; text-align:center }
+    .login-page::after {
+      content:"";
+      position:absolute;
+      inset:0;
+      background:radial-gradient(circle at 50% 25%, rgba(255,255,255,0.06), transparent 28%), radial-gradient(circle at 20% 80%, rgba(90,200,255,0.08), transparent 20%), radial-gradient(circle at 80% 75%, rgba(81,255,183,0.08), transparent 18%);
+      pointer-events:none;
+    }
+    @media (max-width: 640px) {
+      .login-page {
+        padding: 16px;
+        align-items: flex-start;
+      }
+
+      .login-card {
+        max-width: 100%;
+        padding: 24px 18px;
+        border-radius: 16px;
+      }
+
+      .login-card .brand img {
+        height: 72px;
+      }
+
+      .login-card h2 {
+        font-size: 22px;
+      }
+
+      .btn {
+        width: 100%;
+        min-width: 0;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .login-orb--blue {
+        width: 150px;
+        height: 150px;
+        left: -18px;
+        top: 8%;
+      }
+
+      .login-orb--green {
+        width: 130px;
+        height: 130px;
+        right: -18px;
+        bottom: 10%;
+      }
+
+      .login-orb--small-blue,
+      .login-orb--small-green {
+        display: none;
+      }
+
+      .login-card {
+        padding: 20px 16px;
+      }
+
+      .login-card input {
+        padding: 11px 12px;
+      }
+
+      .login-card h2 {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body class="admin-page">
+  <div class="login-page">
+    <div class="login-orb login-orb--blue"></div>
+    <div class="login-orb login-orb--green"></div>
+    <div class="login-orb login-orb--small-blue"></div>
+    <div class="login-orb login-orb--small-green"></div>
+    <div class="login-card">
+      <div class="brand">
+        <img src="https://zhdconsulting.com/main-logo.svg" alt="ZHD Consulting logo">
+        <div>
+          <h2>CV ANALYSER</h2>
+        </div>
+      </div>
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <div class="flash">{{ messages[0] }}</div>
+        {% endif %}
+      {% endwith %}
+      <form method="post" action="{{ url_for('login') }}">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" required autofocus />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required />
+
+        <div class="form-actions">
+          <button type="submit" class="btn">LOGIN</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

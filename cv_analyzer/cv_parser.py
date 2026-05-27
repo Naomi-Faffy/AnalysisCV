@@ -11,24 +11,12 @@ try:
 except Exception:
     PYRES_PARSER_AVAILABLE = False
 
-try:
-    import spacy
-    SPACY_AVAILABLE = True
-except ImportError:
-    SPACY_AVAILABLE = False
-    spacy = None
+SPACY_AVAILABLE = False
+spacy = None
 
 class CVParser:
     def __init__(self):
-        if SPACY_AVAILABLE:
-            try:
-                self.nlp = spacy.load("en_core_web_sm")
-            except Exception:
-                print("Warning: spacy model not loaded. Install with: python -m spacy download en_core_web_sm")
-                self.nlp = None
-        else:
-            print("Warning: spacy not installed. Install with: pip install spacy")
-            self.nlp = None
+        self.nlp = None
         # PyResparser availability
         self.pyresparser_available = PYRES_PARSER_AVAILABLE
         

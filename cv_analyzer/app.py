@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_file, Response, session, redirect, url_for, flash
 import mimetypes
 from flask_cors import CORS
 import os
@@ -19,20 +19,54 @@ try:
     import mammoth
 except Exception:
     mammoth = None
+try:
+    from dotenv import load_dotenv
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    PROJECT_ROOT = os.path.dirname(BASE_DIR)
+    load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
+    load_dotenv(os.path.join(BASE_DIR, '.env'))
+except Exception:
+    pass
 
 app = Flask(__name__)
 CORS(app)
 
 # Security settings
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+app.secret_key = os.environ.get('SECRET_KEY') or 'cv-analysis-dev-secret'
+# Admin credential sources (prefer .env or environment variables)
+_ADMIN_USERNAME = os.environ.get('CV_ADMIN_USERNAME') or os.environ.get('ADMIN_USERNAME') or 'ZHDCONSULTING'
+_ADMIN_PASSWORD = os.environ.get('CV_ADMIN_PASSWORD') or os.environ.get('ADMIN_PASSWORD') or 'hr@zhdconsulting'
+# Admin credentials are expected from the environment or loaded via python-dotenv
+
+def login_required(func):
+    from functools import wraps
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if session.get('cv_admin'):
+            return func(*args, **kwargs)
+        return redirect(url_for('login', next=request.path))
+    return wrapper
+
+
+# Require login for all routes by default; allow exceptions for login and static assets
+@app.before_request
+def require_login_before_everything():
+    # Allow unauthenticated access only to login page, static assets, and CORS preflight
+    path = (request.path or '').lower()
+    if path.startswith('/static/') or path.startswith('/favicon') or path.startswith('/login'):
+        return
+
+    # Allow OPTIONS for CORS preflight without auth
+    if request.method == 'OPTIONS':
+        return
+
+    if not session.get('cv_admin'):
+        return redirect(url_for('login', next=request.path))
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-RUNTIME_BASE_DIR = BASE_DIR
-DEFAULT_STORAGE_ROOT = os.path.join(RUNTIME_BASE_DIR, 'data') if os.getenv('RENDER') else os.path.join(RUNTIME_BASE_DIR, 'data')
-STORAGE_ROOT = os.getenv('CV_ANALYZER_STORAGE_DIR', DEFAULT_STORAGE_ROOT)
-DATA_FOLDER = os.getenv('CV_ANALYZER_DATA_DIR', STORAGE_ROOT)
-UPLOAD_FOLDER = os.getenv('CV_ANALYZER_UPLOAD_DIR', os.path.join(DATA_FOLDER, 'uploads'))
+DATA_FOLDER = os.path.join(BASE_DIR, 'data')
+UPLOAD_FOLDER = os.path.join(DATA_FOLDER, 'uploads')
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per individual file
 MAX_BATCH_SIZE = 300 * 1024 * 1024  # 300MB for batch uploads (~20 CVs)
@@ -54,44 +88,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
 
-def _migrate_legacy_storage_once():
-    """Migrate old local data/uploads into configured storage if destination is empty."""
-    legacy_data_dir = os.path.join(RUNTIME_BASE_DIR, 'data')
-    legacy_upload_dir = os.path.join(RUNTIME_BASE_DIR, 'uploads')
-
-    if os.path.abspath(DATA_FOLDER) != os.path.abspath(legacy_data_dir):
-        for filename in ['applicants.xlsx', 'jobs.xlsx', 'master_skills.json']:
-            legacy_file = os.path.join(legacy_data_dir, filename)
-            target_file = os.path.join(DATA_FOLDER, filename)
-            if os.path.exists(legacy_file) and not os.path.exists(target_file):
-                try:
-                    shutil.copy2(legacy_file, target_file)
-                except Exception as exc:
-                    print(f"Warning: failed to migrate {legacy_file} -> {target_file}: {exc}")
-
-    if os.path.abspath(UPLOAD_FOLDER) != os.path.abspath(legacy_upload_dir):
-        try:
-            target_has_files = any(
-                os.path.isfile(os.path.join(UPLOAD_FOLDER, name))
-                for name in os.listdir(UPLOAD_FOLDER)
-            )
-        except Exception:
-            target_has_files = False
-
-        if not target_has_files and os.path.exists(legacy_upload_dir):
-            for filename in os.listdir(legacy_upload_dir):
-                legacy_file = os.path.join(legacy_upload_dir, filename)
-                target_file = os.path.join(UPLOAD_FOLDER, filename)
-                if os.path.isfile(legacy_file) and not os.path.exists(target_file):
-                    try:
-                        shutil.copy2(legacy_file, target_file)
-                    except Exception as exc:
-                        print(f"Warning: failed to migrate {legacy_file} -> {target_file}: {exc}")
-
-
-_migrate_legacy_storage_once()
-
-
 def _assert_storage_writable(paths):
     """Fail fast when configured storage paths are not writable."""
     for path in paths:
@@ -104,16 +100,14 @@ def _assert_storage_writable(paths):
         except Exception as exc:
             raise RuntimeError(
                 f"Storage path is not writable: {path}. "
-                "Check Render disk mountPath and CV_ANALYZER_* environment variables."
+                "Check your hosting file permissions and app data directory configuration."
             ) from exc
 
 
-_assert_storage_writable([STORAGE_ROOT, DATA_FOLDER, UPLOAD_FOLDER])
+_assert_storage_writable([DATA_FOLDER, UPLOAD_FOLDER])
 
 print(
     "[startup] storage configured "
-    f"render={bool(os.getenv('RENDER'))} "
-    f"storage_root={STORAGE_ROOT} "
     f"data_dir={DATA_FOLDER} "
     f"upload_dir={UPLOAD_FOLDER}"
 )
@@ -747,7 +741,13 @@ def process_uploaded_file(file_obj, job_id: str = ''):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # If already logged in, show the main application dashboard; otherwise send to login
+    if session.get('cv_admin'):
+        try:
+            return render_template('index.html')
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    return redirect(url_for('login', next=request.path))
 
 
 @app.route('/api/jobs', methods=['GET'])
@@ -1386,9 +1386,9 @@ def request_entity_too_large(error):
     return jsonify({'error': 'Upload too large. Maximum batch size is 300MB (supports ~20 CVs per upload)'}), 413
 
 @app.route('/admin')
+@login_required
 def admin_page():
-    """Serve the admin skills management page"""
-    # Render via Jinja so `url_for` works inside the template
+    """Serve the admin skills management page (login required)"""
     try:
         return render_template('admin.html')
     except Exception as e:
@@ -1442,6 +1442,44 @@ def save_master_skills():
         }), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Simple admin login using creds from environment variables"""
+    if request.method == 'GET':
+        return render_template('login.html')
+
+    # POST: validate
+    username = (request.form.get('username', '') or '').strip()
+    password = (request.form.get('password', '') or '').strip()
+
+    # Avoid failing open: if env vars are not set, deny login
+    if not _ADMIN_USERNAME or not _ADMIN_PASSWORD:
+        flash('Admin credentials not configured on the server.')
+        return render_template('login.html'), 403
+
+    # Constant-time comparison
+    import hmac
+    admin_username = (_ADMIN_USERNAME or '').strip()
+    admin_password = (_ADMIN_PASSWORD or '').strip()
+    user_ok = hmac.compare_digest(username, admin_username)
+    pass_ok = hmac.compare_digest(password, admin_password)
+
+    if user_ok and pass_ok:
+        session['cv_admin'] = True
+        # Prefer redirecting back to 'next' if provided, otherwise take the user to the main app
+        # After successful login, always take user to the main application dashboard.
+        return redirect(url_for('index'))
+
+    flash('Invalid username or password')
+    return render_template('login.html'), 401
+
+
+@app.route('/logout')
+def logout():
+    session.pop('cv_admin', None)
+    return redirect(url_for('login'))
 
 @app.route('/api/admin/master-skills/reset', methods=['POST'])
 def reset_master_skills():
