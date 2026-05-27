@@ -195,6 +195,9 @@
         {% endif %}
       {% endwith %}
       <form method="post" action="{{ url_for('login') }}">
+        {% if csrf_token is defined %}
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        {% endif %}
         <label for="username">Username</label>
         <input id="username" name="username" type="text" required autofocus />
 

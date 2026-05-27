@@ -15,6 +15,9 @@ from jobs_manager import JobsManager
 from blob_storage import BlobStorageClient
 import pandas as pd
 from datetime import datetime
+import uuid
+import logging
+import threading
 try:
     import mammoth
 except Exception:
@@ -23,19 +26,57 @@ try:
     from dotenv import load_dotenv
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(BASE_DIR)
-    load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
-    load_dotenv(os.path.join(BASE_DIR, '.env'))
+    load_dotenv(os.path.join(PROJECT_ROOT, '.env'), override=True)
+    load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 except Exception:
     pass
 
 app = Flask(__name__)
 CORS(app)
 
-# Security settings
-app.secret_key = os.environ.get('SECRET_KEY') or 'cv-analysis-dev-secret'
-# Admin credential sources (prefer .env or environment variables)
-_ADMIN_USERNAME = os.environ.get('CV_ADMIN_USERNAME') or os.environ.get('ADMIN_USERNAME') or 'ZHDCONSULTING'
-_ADMIN_PASSWORD = os.environ.get('CV_ADMIN_PASSWORD') or os.environ.get('ADMIN_PASSWORD') or 'hr@zhdconsulting'
+# Require a SECRET_KEY from environment (do NOT hard-code secrets)
+app.secret_key = os.environ.get('SECRET_KEY')
+if not app.secret_key:
+    raise RuntimeError(
+        'SECRET_KEY is not set. Create a .env file with SECRET_KEY and restart the app.'
+    )
+
+# Ensure CSRF uses the same secret as the app session
+app.config['WTF_CSRF_SECRET_KEY'] = app.secret_key
+
+# Session cookie security (apply immediately after app creation)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+# Only enforce Secure cookies in production or when explicitly requested via env
+_force_secure = os.environ.get('FLASK_ENV', '').lower() == 'production' or os.environ.get('ENABLE_SECURE_COOKIES') == '1'
+app.config['SESSION_COOKIE_SECURE'] = bool(_force_secure)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Enable CSRF protection when flask-wtf is available
+try:
+    from flask_wtf.csrf import CSRFProtect
+    csrf = CSRFProtect(app)
+except Exception:
+    csrf = None
+    print('Warning: flask-wtf not installed; CSRF protection disabled. Install with: pip install flask-wtf')
+else:
+    # expose `csrf_token()` in templates for simple forms that aren't FlaskForm-based
+    try:
+        from flask_wtf.csrf import generate_csrf
+
+        @app.context_processor
+        def _inject_csrf_token():
+            return dict(csrf_token=lambda: generate_csrf())
+    except Exception:
+        pass
+# Admin credential sources (require environment variables; no hard-coded fallbacks)
+# Prevent accidental insecure deployments by forcing explicit env vars.
+_ADMIN_USERNAME = os.environ.get('CV_ADMIN_USERNAME')
+_ADMIN_PASSWORD = os.environ.get('CV_ADMIN_PASSWORD')
+# Log presence of admin credentials (do not log actual values)
+try:
+    logging.info(f"Admin credentials configured: username_set={bool(_ADMIN_USERNAME)}, password_set={bool(_ADMIN_PASSWORD)}")
+except Exception:
+    pass
 # Admin credentials are expected from the environment or loaded via python-dotenv
 
 def login_required(func):
@@ -53,7 +94,7 @@ def login_required(func):
 def require_login_before_everything():
     # Allow unauthenticated access only to login page, static assets, and CORS preflight
     path = (request.path or '').lower()
-    if path.startswith('/static/') or path.startswith('/favicon') or path.startswith('/login'):
+    if path.startswith('/static/') or path.startswith('/favicon') or path.startswith('/login') or path.startswith('/__debug/'):
         return
 
     # Allow OPTIONS for CORS preflight without auth
@@ -65,8 +106,10 @@ def require_login_before_everything():
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FOLDER = os.path.join(BASE_DIR, 'data')
-UPLOAD_FOLDER = os.path.join(DATA_FOLDER, 'uploads')
+# Allow configuring storage root (keep uploads outside public folder by default)
+STORAGE_ROOT = os.environ.get('STORAGE_ROOT') or os.path.join(PROJECT_ROOT, 'cv_storage')
+DATA_FOLDER = STORAGE_ROOT
+UPLOAD_FOLDER = os.path.join(STORAGE_ROOT, 'uploads')
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per individual file
 MAX_BATCH_SIZE = 300 * 1024 * 1024  # 300MB for batch uploads (~20 CVs)
@@ -75,6 +118,23 @@ JOBS_FILE = os.path.join(DATA_FOLDER, 'jobs.xlsx')
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_BATCH_SIZE
+
+# Session cookie security (already configured above; keep here for clarity)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Session lifetime
+from datetime import timedelta
+app.permanent_session_lifetime = timedelta(hours=8)
+
+# Configure logging
+os.makedirs(STORAGE_ROOT, exist_ok=True)
+log_path = os.path.join(STORAGE_ROOT, 'app.log')
+logging.basicConfig(
+    filename=log_path,
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s'
+)
 
 # Initialize components
 cv_parser = CVParser()
@@ -106,16 +166,24 @@ def _assert_storage_writable(paths):
 
 _assert_storage_writable([DATA_FOLDER, UPLOAD_FOLDER])
 
-print(
+logging.info(
     "[startup] storage configured "
     f"data_dir={DATA_FOLDER} "
     f"upload_dir={UPLOAD_FOLDER}"
 )
 
+def _background_refresh_scores():
+    try:
+        excel_manager.refresh_candidate_scores(scoring_system, jobs_manager)
+        logging.info('Background candidate score refresh completed')
+    except Exception:
+        logging.exception('Could not refresh candidate scores in background')
+
+# Run a background refresh to avoid slow startups being killed by cPanel
 try:
-    excel_manager.refresh_candidate_scores(scoring_system, jobs_manager)
-except Exception as exc:
-    print(f"Warning: could not refresh candidate scores on startup: {exc}")
+    threading.Thread(target=_background_refresh_scores, daemon=True).start()
+except Exception:
+    logging.exception('Failed to start background refresh thread')
 
 
 def get_effective_job(job_id: str = "") -> dict:
@@ -660,7 +728,9 @@ def process_uploaded_file(file_obj, job_id: str = ''):
             'error': f"Invalid file type for {file_obj.filename}. Only PDF and DOCX are allowed."
         }
 
-    filename = secure_filename(file_obj.filename)
+    # Generate a collision-resistant filename using UUID prefix
+    unique_prefix = uuid.uuid4().hex
+    filename = f"{unique_prefix}_{secure_filename(file_obj.filename)}"
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     file_obj.save(file_path)
 
@@ -1463,6 +1533,11 @@ def login():
     import hmac
     admin_username = (_ADMIN_USERNAME or '').strip()
     admin_password = (_ADMIN_PASSWORD or '').strip()
+    # Debug logging for login attempts (no plaintext admin passwords)
+    try:
+        logging.info(f"Login attempt for user='{username}' admin_configured={bool(admin_username)} provided_pw_len={len(password)} admin_pw_len={len(admin_password)}")
+    except Exception:
+        pass
     user_ok = hmac.compare_digest(username, admin_username)
     pass_ok = hmac.compare_digest(password, admin_password)
 
@@ -1480,6 +1555,19 @@ def login():
 def logout():
     session.pop('cv_admin', None)
     return redirect(url_for('login'))
+
+
+@app.route('/__debug/admin-creds')
+def _debug_admin_creds():
+    # Local-only debug endpoint to inspect whether admin creds were loaded
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return jsonify({'error': 'forbidden'}), 403
+    return jsonify({
+        'admin_username_set': bool(_ADMIN_USERNAME),
+        'admin_password_set': bool(_ADMIN_PASSWORD),
+        'admin_username_len': len((_ADMIN_USERNAME or '').strip()),
+        'admin_password_len': len((_ADMIN_PASSWORD or '').strip())
+    })
 
 @app.route('/api/admin/master-skills/reset', methods=['POST'])
 def reset_master_skills():
