@@ -1198,6 +1198,19 @@ tbody tr:hover {
 .detail-section h4 {
     color: var(--ink-900);
     margin-bottom: 8px;
+
+/* Additional simple responsive tweaks */
+@media (max-width: 700px) {
+    table { min-width: 0 !important; width: 100% !important; }
+    th, td { white-space: normal !important; word-break: break-word; }
+    .table-container { overflow-x: auto; }
+    img, .logo-img { max-width: 100%; height: auto; }
+    .sidebar { position: relative; width: 100%; transform: none; inset: auto; }
+    .main-content { margin-left: 0; width: 100%; padding: 12px; }
+    .filter-actions { flex-direction: column; }
+    .admin-input-row { flex-direction: column; align-items: stretch; }
+    .modal-content { width: 96vw; max-width: 96vw; }
+}
     border-bottom: 1px solid rgba(15, 23, 42, 0.12);
     padding-bottom: 6px;
 }
@@ -1837,5 +1850,221 @@ canvas {
         grid-column: auto;
         grid-row: auto;
         min-height: auto;
+    }
+}
+
+/* Final responsive safety overrides (kept at file end to win cascade) */
+@media (max-width: 1100px) {
+    .container {
+        display: block !important;
+    }
+
+    .sidebar {
+        position: static !important;
+        inset: auto !important;
+        width: calc(100% - 24px) !important;
+        margin: 12px !important;
+        transform: none !important;
+    }
+
+    .sidebar-footer {
+        position: static !important;
+        margin-top: 12px;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 14px !important;
+    }
+
+    .sidebar-toggle {
+        display: none !important;
+    }
+
+    .top-bar,
+    .top-bar.dashboard-hero {
+        min-height: 0 !important;
+        padding: 16px !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px;
+    }
+
+    .hero-heading {
+        width: 100%;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .stats-summary {
+        width: 100% !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .dashboard-grid,
+    .bento-grid,
+    .jobs-layout,
+    .job-form-grid,
+    .admin-stats {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (max-width: 760px) {
+    body {
+        overflow-x: hidden;
+    }
+
+    .card {
+        padding: 14px !important;
+        border-radius: 16px;
+    }
+
+    .stats-summary {
+        grid-template-columns: 1fr !important;
+    }
+
+    .filter-actions,
+    .admin-input-row,
+    .admin-section-title,
+    .job-detail-actions {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    .pagination-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    table {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    th,
+    td {
+        white-space: normal !important;
+        word-break: break-word;
+        font-size: 12px;
+        padding: 8px 6px;
+    }
+
+    .modal-content,
+    #candidateModal .modal-content {
+        width: 96vw !important;
+        max-width: 96vw !important;
+        padding: 14px;
+    }
+}
+
+img,
+canvas,
+svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Device-targeted responsive lock for iPad and phones */
+@media (max-width: 1024px) {
+    .sidebar {
+        position: static !important;
+        width: calc(100% - 20px) !important;
+        margin: 10px !important;
+        border-radius: 18px;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 12px !important;
+    }
+
+    .top-bar,
+    .top-bar.dashboard-hero {
+        min-height: auto !important;
+        padding: 14px !important;
+        border-radius: 18px;
+    }
+
+    #page-title,
+    .top-bar h2 {
+        font-size: clamp(28px, 5vw, 40px) !important;
+        line-height: 1.05;
+    }
+
+    .stats-summary {
+        grid-template-columns: 1fr 1fr !important;
+    }
+}
+
+@media (max-width: 820px) {
+    .stats-summary {
+        grid-template-columns: 1fr !important;
+    }
+
+    .stat-card {
+        padding: 12px !important;
+    }
+
+    .stat-value {
+        font-size: 24px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .container,
+    .main-content,
+    .card,
+    .table-container,
+    .upload-area,
+    .job-card,
+    .candidate-item,
+    .modal-content {
+        max-width: 100% !important;
+    }
+
+    .nav-menu {
+        display: block !important;
+    }
+
+    .nav-menu li {
+        margin: 6px 0 !important;
+    }
+
+    .nav-link {
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        font-size: 14px !important;
+    }
+
+    .main-content {
+        padding: 10px !important;
+    }
+
+    .card {
+        padding: 12px !important;
+    }
+
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .btn-download,
+    .btn-resume {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .filter-group input,
+    .filter-group select,
+    .filter-group textarea,
+    .admin-input-row input {
+        width: 100%;
+        min-width: 0;
     }
 }

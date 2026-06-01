@@ -451,6 +451,19 @@ body.admin-page .nav-link.admin-back-link::after {
     min-width: 0;
 }
 
+/* Simple responsive overrides for small screens */
+@media (max-width: 700px) {
+    table { min-width: 0 !important; width: 100% !important; }
+    th, td { white-space: normal !important; word-break: break-word; }
+    .table-container { overflow-x: auto; }
+    img, .logo-img { max-width: 100%; height: auto; }
+    .sidebar { position: relative; width: 100%; transform: none; inset: auto; }
+    .main-content { margin-left: 0; width: 100%; padding: 12px; }
+    .filter-actions { flex-direction: column; }
+    .admin-input-row { flex-direction: column; align-items: stretch; }
+    .modal-content { width: 96vw; max-width: 96vw; }
+}
+
 .admin-actions {
     margin-top: 1.15rem;
 }
