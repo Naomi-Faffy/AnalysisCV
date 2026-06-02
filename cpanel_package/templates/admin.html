@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260601_2') }}">
+    <!-- admin page visual rules moved to static/css/style.css -->
+</head>
+<body class="admin-page">
+    <div class="admin-shell">
+        <div class="top-bar admin-header">
+            <div class="admin-header-left">
+                <h2 class="admin-title">Admin: Master Skills</h2>
+            </div>
+            <a class="admin-back-link" href="/">Back to App</a>
+        </div>
+
+        <div class="card admin-card">
+            <div class="admin-section-title">
+                <h3>Master Skills List</h3>
+            </div>
+
+            <div id="message" class="message"></div>
+
+            <div class="admin-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="skillCount">0</div>
+                    <div class="stat-label">Total Skills</div>
+                </div>
+                <div class="stat-card accent search-row">
+                    <input id="skillSearchInput" placeholder="Search skill...">
+                    <button class="btn-primary" onclick="searchSkill()">Search</button>
+                </div>
+            </div>
+
+            <div class="admin-input-row">
+                <input type="text" id="newSkillInput" placeholder="Enter a new skill">
+                <button class="btn-primary" onclick="addSkill()">Add Skill</button>
+            </div>
+
+            <div class="skills-grid" id="skillsGrid"></div>
+
+            <div class="actions admin-actions">
+                <button class="btn-primary" onclick="saveChanges()">Save Changes to File</button>
+                <button class="btn-danger" onclick="resetToDefault()">Reset to Default</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            const gradient = 'linear-gradient(180deg, rgba(14, 24, 42, 0.92), rgba(10, 17, 31, 0.82)), rgba(9, 14, 25, 0.72)';
+            try {
+                const header = document.querySelector('.top-bar.admin-header');
+                const back = document.querySelector('.admin-back-link');
+                if (header) header.style.setProperty('background', gradient, 'important');
+                if (back) back.style.setProperty('background', gradient, 'important');
+                if (header) header.style.setProperty('border-color', 'rgba(255,255,255,0.08)', 'important');
+            } catch (e) {
+                // silent
+            }
+        })();
+        let originalSkills = [];
+        let currentSkills = [];
+
+        async function loadSkills() {
+            try {
+                const res = await fetch('/api/admin/master-skills');
+                const data = await res.json();
+                if (data.success) {
+                    originalSkills = [...data.skills];
+                    currentSkills = [...data.skills];
+                    renderSkills();
+                    updateStats();
+                }
+            } catch (error) {
+                showMessage('Failed to load skills: ' + error.message, 'error');
+            }
+        }
+
+        function renderSkills(filter) {
+            const q = filter ? String(filter).trim().toLowerCase() : '';
+            const grid = document.getElementById('skillsGrid');
+            grid.innerHTML = currentSkills
+                .sort()
+                .map(skill => {
+                    const isMatch = q && skill.toLowerCase().includes(q);
+                    return `
+                    <div class="skill-tag ${isMatch ? 'highlight' : ''}">
+                        <span>${escapeHtml(skill)}</span>
+                        <button class="btn btn-remove" onclick="removeSkill('${escapeHtml(skill)}')">×</button>
+                    </div>
+                `
+                })
+                .join('');
+        }
+
+        function addSkill() {
+            const input = document.getElementById('newSkillInput');
+            const skill = input.value.trim();
+            if (!skill) {
+                showMessage('Skill name cannot be empty', 'error');
+                return;
+            }
+            if (currentSkills.includes(skill)) {
+                showMessage(`"${skill}" already exists`, 'error');
+                return;
+            }
+            currentSkills.push(skill);
+            input.value = '';
+            renderSkills();
+            updateStats();
+        }
+
+        function removeSkill(skill) {
+            currentSkills = currentSkills.filter(s => s !== skill);
+            renderSkills();
+            updateStats();
+        }
+
+        function searchSkill() {
+            const q = document.getElementById('skillSearchInput').value || '';
+            renderSkills(q);
+            if (!q) return;
+            // focus first match if present
+            const first = document.querySelector('.skill-tag.highlight');
+            if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // clearSkillSearch removed — Clear button no longer present
+
+        function updateStats() {
+            const skillCountEl = document.getElementById('skillCount');
+            if (skillCountEl) {
+                skillCountEl.textContent = currentSkills.length;
+            }
+            const changes = currentSkills.length !== originalSkills.length || 
+                            !currentSkills.every(s => originalSkills.includes(s));
+            const modifyCountEl = document.getElementById('modifyCount');
+            if (modifyCountEl) {
+                modifyCountEl.textContent = changes ? '✓' : '0';
+            }
+        }
+
+        async function saveChanges() {
+            try {
+                const res = await fetch('/api/admin/master-skills', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skills: currentSkills })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    originalSkills = [...currentSkills];
+                    updateStats();
+                    showMessage('Skills saved successfully!', 'success');
+                } else {
+                    showMessage('Failed to save: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showMessage('Error saving skills: ' + error.message, 'error');
+            }
+        }
+
+        async function resetToDefault() {
+            if (!confirm('Reset to default skill list? This will discard all changes.')) return;
+            try {
+                const res = await fetch('/api/admin/master-skills/reset', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    await loadSkills();
+                    showMessage('Reset to default skills', 'success');
+                }
+            } catch (error) {
+                showMessage('Error resetting: ' + error.message, 'error');
+            }
+        }
+
+        function showMessage(msg, type) {
+            const el = document.getElementById('message');
+            el.textContent = msg;
+            el.className = 'message ' + type;
+            setTimeout(() => el.className = 'message', 5000);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.getElementById('newSkillInput').addEventListener('keypress', e => {
+            if (e.key === 'Enter') addSkill();
+        });
+
+        loadSkills();
+    </script>
+</body>
+</html>

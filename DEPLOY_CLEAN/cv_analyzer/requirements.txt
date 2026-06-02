@@ -1,0 +1,13 @@
+Flask
+flask-cors
+pandas
+openpyxl
+pdfplumber
+python-docx
+mammoth
+requests
+flask-wtf
+python-dotenv
+Werkzeug
+gunicorn
+numpy

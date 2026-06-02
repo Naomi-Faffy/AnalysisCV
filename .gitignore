@@ -7,3 +7,10 @@ cv_analyzer/__pycache__/
 cv_analyzer/data/*.xlsx
 cv_analyzer/uploads/
 cv_analyzer/data/uploads/
+.venv
+.git
+.vscode
+.qodo
+server.err.log
+server.out.log
+AnalysisCV.zip
